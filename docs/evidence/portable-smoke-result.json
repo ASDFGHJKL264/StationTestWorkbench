@@ -1,0 +1,9 @@
+﻿{
+    "clientExitCode":  0,
+    "simulatorProcesses":  4,
+    "databaseCreated":  true,
+    "sqliteReady":  true,
+    "qtOnPath":  false,
+    "package":  "D:\\demoqt6\\StationTestWorkbench\\dist\\StationTestWorkbench-0.1.0-win64",
+    "evidenceDirectory":  "D:\\demoqt6\\StationTestWorkbench\\build\\portable-smoke-0785978908ed40ceaa3b4cb7c2852762"
+}

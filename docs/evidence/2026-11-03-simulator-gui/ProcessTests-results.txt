@@ -1,0 +1,12 @@
+********* Start testing of ProcessTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : ProcessTests::initTestCase()
+QINFO  : ProcessTests::fourIndependentExecutablesPassFailAndAckRetry() station final 1 "PASS"
+QINFO  : ProcessTests::fourIndependentExecutablesPassFailAndAckRetry() station final 2 "PASS"
+QINFO  : ProcessTests::fourIndependentExecutablesPassFailAndAckRetry() station final 3 "FAIL"
+QINFO  : ProcessTests::fourIndependentExecutablesPassFailAndAckRetry() station final 4 "PASS"
+QINFO  : ProcessTests::fourIndependentExecutablesPassFailAndAckRetry() four independent TCP simulator processes completed, station3 FAIL, station4 lost ACK recovered
+PASS   : ProcessTests::fourIndependentExecutablesPassFailAndAckRetry()
+PASS   : ProcessTests::cleanupTestCase()
+Totals: 3 passed, 0 failed, 0 skipped, 0 blacklisted, 3044ms
+********* Finished testing of ProcessTests *********

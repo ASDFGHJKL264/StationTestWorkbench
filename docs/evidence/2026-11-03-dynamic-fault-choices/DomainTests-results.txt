@@ -1,0 +1,11 @@
+********* Start testing of DomainTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : DomainTests::initTestCase()
+PASS   : DomainTests::inclusiveLimitsAndLocallyDerivedVerdict()
+PASS   : DomainTests::missingReorderedAndWrongIdentityRejected()
+PASS   : DomainTests::cancelledResultRetainsPrefixWithoutPretendingPass()
+PASS   : DomainTests::invalidRecipeAndStationRejectedBeforeDispatch()
+PASS   : DomainTests::nonFiniteMeasurementCannotBecomePass()
+PASS   : DomainTests::cleanupTestCase()
+Totals: 7 passed, 0 failed, 0 skipped, 0 blacklisted, 2ms
+********* Finished testing of DomainTests *********

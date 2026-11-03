@@ -1,0 +1,10 @@
+********* Start testing of SimulatorWindowTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : SimulatorWindowTests::initTestCase()
+QDEBUG : SimulatorWindowTests::graphicalControlsDriveRealPassFailAndAckRetry() FT_New_Face failed with index 0 : 2
+PASS   : SimulatorWindowTests::graphicalControlsDriveRealPassFailAndAckRetry()
+PASS   : SimulatorWindowTests::disconnectButtonPreservesRunAndClientRecovers()
+PASS   : SimulatorWindowTests::occupiedPortReportsFailureAndCanRetry()
+PASS   : SimulatorWindowTests::cleanupTestCase()
+Totals: 5 passed, 0 failed, 0 skipped, 0 blacklisted, 3523ms
+********* Finished testing of SimulatorWindowTests *********

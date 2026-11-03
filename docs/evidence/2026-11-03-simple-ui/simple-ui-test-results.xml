@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-ninja"
+	tests="3"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="hgk"
+	time="6"
+	timestamp="2026-11-03T01:10:22"
+	>
+	<testcase name="ModelTests" classname="ModelTests" time="0.494872" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="WindowTests" classname="WindowTests" time="1.54054" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="SimulatorWindowTests" classname="SimulatorWindowTests" time="3.9997" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+</testsuite>

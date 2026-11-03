@@ -1,0 +1,17 @@
+********* Start testing of ModelTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : ModelTests::initTestCase()
+PASS   : ModelTests::stationUpdatesPreserveSelectionIdentity()
+PASS   : ModelTests::stationRowsAreSortedAndBounded()
+PASS   : ModelTests::executionVerdictAndArchiveAreIndependent()
+PASS   : ModelTests::stepsDistinguishUnmeasuredZeroAndFailure()
+PASS   : ModelTests::stepUpdatesKeepPersistentIndexes()
+PASS   : ModelTests::historyCursorDoesNotFollowViewSort()
+PASS   : ModelTests::historySortUsesYearAndNumericStation()
+PASS   : ModelTests::logsHaveBoundedMemoryAndCorrectRemoval()
+QDEBUG : ModelTests::qualityDelegateFallsBackWithoutChangingModel() FT_New_Face failed with index 0 : 2
+PASS   : ModelTests::qualityDelegateFallsBackWithoutChangingModel()
+PASS   : ModelTests::qualityDelegatePreservesRowSelectionAndAccessibleText()
+PASS   : ModelTests::cleanupTestCase()
+Totals: 12 passed, 0 failed, 0 skipped, 0 blacklisted, 181ms
+********* Finished testing of ModelTests *********

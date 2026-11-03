@@ -1,0 +1,12 @@
+********* Start testing of LoggerTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : LoggerTests::initTestCase()
+PASS   : LoggerTests::normalBurstPreservesWarningAdmissionAndReportsActualLoss()
+PASS   : LoggerTests::warningBurstIsBoundedAndCounted()
+PASS   : LoggerTests::shutdownDrainsPendingLinesAfterBackgroundWrite()
+PASS   : LoggerTests::lineBoundariesAndUtf8SurviveFileWrite()
+PASS   : LoggerTests::impossibleDirectorySurfacesWriteFailure()
+PASS   : LoggerTests::rotationRetainsNineArchivesAndWritesNewFile()
+PASS   : LoggerTests::cleanupTestCase()
+Totals: 8 passed, 0 failed, 0 skipped, 0 blacklisted, 179ms
+********* Finished testing of LoggerTests *********

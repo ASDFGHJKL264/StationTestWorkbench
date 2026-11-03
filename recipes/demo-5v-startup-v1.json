@@ -1,0 +1,38 @@
+{
+  "version": "demo-5v-startup-v1",
+  "name": "5V模块功能测试（含启动耗时，模拟配方）",
+  "steps": [
+    {
+      "id": "voltage",
+      "label": "输出电压",
+      "unit": "V",
+      "min": 4.9,
+      "max": 5.1,
+      "nominal": 5.0
+    },
+    {
+      "id": "current",
+      "label": "待机电流",
+      "unit": "mA",
+      "min": 10,
+      "max": 60,
+      "nominal": 35
+    },
+    {
+      "id": "io",
+      "label": "IO回环",
+      "unit": "bool",
+      "min": 1,
+      "max": 1,
+      "nominal": 1
+    },
+    {
+      "id": "startup",
+      "label": "启动耗时",
+      "unit": "ms",
+      "min": 0,
+      "max": 500,
+      "nominal": 120
+    }
+  ]
+}

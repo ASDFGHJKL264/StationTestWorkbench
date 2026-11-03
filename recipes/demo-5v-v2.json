@@ -1,0 +1,9 @@
+{
+  "version": "demo-5v-v2",
+  "name": "5V电子模块功能测试（更严格的模拟配方）",
+  "steps": [
+    { "id": "voltage", "label": "输出电压", "unit": "V", "min": 4.9, "max": 5.1, "nominal": 5.0 },
+    { "id": "current", "label": "待机电流", "unit": "mA", "min": 10, "max": 60, "nominal": 35 },
+    { "id": "io", "label": "IO回环", "unit": "bool", "min": 1, "max": 1, "nominal": 1 }
+  ]
+}

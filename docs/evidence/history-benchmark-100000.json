@@ -1,0 +1,57 @@
+{
+    "architecture": "x86_64",
+    "cursor100RowQuery": {
+        "maxMs": 5.7035,
+        "meanMs": 4.013580000000001,
+        "minMs": 3.5338,
+        "p50Ms": 3.9405,
+        "p95Ms": 4.3902,
+        "percentileMethod": "nearest_rank",
+        "sampleCount": 100
+    },
+    "exactSnQuery": {
+        "maxMs": 1.2034,
+        "meanMs": 0.21820599999999996,
+        "minMs": 0.1266,
+        "p50Ms": 0.1836,
+        "p95Ms": 0.4286,
+        "percentileMethod": "nearest_rank",
+        "sampleCount": 200
+    },
+    "fixture": {
+        "completedRuns": 100000,
+        "databaseAndSidecarBytes": 121556992,
+        "databaseMainBytes": 121294848,
+        "generationMs": 6691.6393,
+        "results": 100000,
+        "steps": 300000,
+        "writeMethod": "synthetic prepared SQL in one bulk transaction; not production write-path performance"
+    },
+    "mainEventLoop10msTimerGap": {
+        "maxMs": 10.862700000000018,
+        "meanMs": 10.000524000000002,
+        "minMs": 9.186099999999982,
+        "p50Ms": 9.984299999999962,
+        "p95Ms": 10.651099999999985,
+        "percentileMethod": "nearest_rank",
+        "sampleCount": 50
+    },
+    "maximumOutstandingQueries": 1,
+    "measurementDurationMs": 500.0271,
+    "measurementNotes": [
+        "Query latency includes queued worker dispatch, real Repository::queryHistory SQL/step loading and delivery to the main event loop.",
+        "Synthetic fixture generation and schema initialization are excluded from query latency and timer gap samples.",
+        "Main-thread QCoreApplication timer gaps are an event-loop responsiveness proxy; no GUI rendering is measured.",
+        "OS file cache may be warm after fixture generation; these are not cold-cache or long-duration stability measurements.",
+        "Exactly one query is outstanding; no queue-peak or high-concurrency claim is made."
+    ],
+    "platform": "Windows 11 Version 25H2",
+    "processMemory": {
+        "peakWorkingSetBytes": 23498752,
+        "scope": "whole benchmark process, including fixture generation",
+        "workingSetBytesAtEnd": 23101440
+    },
+    "qtVersion": "6.10.3",
+    "recordedAtUtc": "2026-11-02T15:31:46.998Z",
+    "success": true
+}

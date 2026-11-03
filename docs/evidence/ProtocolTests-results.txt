@@ -1,0 +1,16 @@
+********* Start testing of ProtocolTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : ProtocolTests::initTestCase()
+PASS   : ProtocolTests::fragmentedAndCoalesced()
+PASS   : ProtocolTests::byteByByteAndGarbageRecovery()
+PASS   : ProtocolTests::invalidHeaderAndCrcAreRejected(version)
+PASS   : ProtocolTests::invalidHeaderAndCrcAreRejected(flags)
+PASS   : ProtocolTests::invalidHeaderAndCrcAreRejected(header-size)
+PASS   : ProtocolTests::invalidHeaderAndCrcAreRejected(oversized-length)
+PASS   : ProtocolTests::invalidHeaderAndCrcAreRejected(payload-crc)
+PASS   : ProtocolTests::validCrcCannotAuthorizeMalformedJson()
+PASS   : ProtocolTests::boundedNoiseAndHugeCallerRead()
+PASS   : ProtocolTests::incompleteMaximumFrameHasBoundedStorage()
+PASS   : ProtocolTests::cleanupTestCase()
+Totals: 12 passed, 0 failed, 0 skipped, 0 blacklisted, 12ms
+********* Finished testing of ProtocolTests *********

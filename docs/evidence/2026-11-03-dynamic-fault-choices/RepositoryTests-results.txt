@@ -1,0 +1,22 @@
+********* Start testing of RepositoryTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : RepositoryTests::initTestCase()
+PASS   : RepositoryTests::initializesWalAndDefaultRecipe()
+PASS   : RepositoryTests::reservationsRequirePublishedIdentityAndExclusiveAdmission()
+PASS   : RepositoryTests::finalEvaluationDeduplicatesAndRejectsConflicts()
+PASS   : RepositoryTests::invalidTerminalLeavesReservationUntouched()
+PASS   : RepositoryTests::stepInsertionFailureRollsBackEntireResult()
+PASS   : RepositoryTests::databaseLockCanRetryWithoutPartialRows()
+PASS   : RepositoryTests::restartPreservesAndReconcilesInterruptedRun()
+PASS   : RepositoryTests::unknownResolutionReleasesPersistedHold()
+PASS   : RepositoryTests::versionOneMigratesWithoutLosingHistory()
+PASS   : RepositoryTests::publishedRecipeVersionIsImmutable()
+PASS   : RepositoryTests::keysetHistoryIsBoundedAndStable()
+PASS   : RepositoryTests::cancellationHasSeparateVerdict()
+PASS   : RepositoryTests::futureSchemaIsRejectedWithoutChanges()
+PASS   : RepositoryTests::connectionLivesOnWorkerThread()
+PASS   : RepositoryTests::reportUsesBoundSnapshotAndEscapesIdentity()
+PASS   : RepositoryTests::reportShowsUnexecutedStepsAndPropagatesFileFailure()
+PASS   : RepositoryTests::cleanupTestCase()
+Totals: 18 passed, 0 failed, 0 skipped, 0 blacklisted, 1734ms
+********* Finished testing of RepositoryTests *********

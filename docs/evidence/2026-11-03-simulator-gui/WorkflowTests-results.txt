@@ -1,0 +1,17 @@
+********* Start testing of WorkflowTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : WorkflowTests::initTestCase()
+PASS   : WorkflowTests::parallelRunsAndDeduplicatedTerminal()
+QINFO  : WorkflowTests::lockedStorageMustNotAcknowledgeOrReleaseStation() metrics GUI 10ms timer maximum gap during DB lock 25 ms ticks 88
+PASS   : WorkflowTests::lockedStorageMustNotAcknowledgeOrReleaseStation()
+PASS   : WorkflowTests::reconnectQueriesWithoutRepeatingStart()
+PASS   : WorkflowTests::wrongRunCannotCompleteAndCancelNeedsTerminal()
+PASS   : WorkflowTests::lostArchiveAckDoesNotReleaseStationEarly()
+PASS   : WorkflowTests::sameProductCannotExecuteAtTwoStationsSimultaneously()
+PASS   : WorkflowTests::clientRestartHoldsIdentityAndAllowsCancellationAfterReconciliation()
+PASS   : WorkflowTests::lateTerminalWinsOverFailedInterruptionRelease()
+QINFO  : WorkflowTests::batchRunsHaveOneTerminalEach() batch runs 100 elapsed ms 10595
+PASS   : WorkflowTests::batchRunsHaveOneTerminalEach()
+PASS   : WorkflowTests::cleanupTestCase()
+Totals: 11 passed, 0 failed, 0 skipped, 0 blacklisted, 19450ms
+********* Finished testing of WorkflowTests *********

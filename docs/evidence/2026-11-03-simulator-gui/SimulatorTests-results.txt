@@ -1,0 +1,16 @@
+********* Start testing of SimulatorTests *********
+Config: Using QtTest library 6.10.3, Qt 6.10.3 (x86_64-little_endian-llp64 shared (dynamic) release build; by GCC 13.1.0), windows 11
+PASS   : SimulatorTests::initTestCase()
+PASS   : SimulatorTests::duplicateStartsAndDurableAck()
+PASS   : SimulatorTests::terminalSurvivesRestartAndLostAck()
+PASS   : SimulatorTests::processRestartNeverInventsPassOrReexecutes()
+PASS   : SimulatorTests::wrongSessionCannotCancelAndCancellationNeedsTerminal()
+PASS   : SimulatorTests::failureInjectionProducesLocalFail()
+PASS   : SimulatorTests::snapshotsAndFaultControlsFollowDurableLifecycle()
+PASS   : SimulatorTests::firstResultAckFaultIsRearmedForEachNewRun()
+PASS   : SimulatorTests::occupiedPortCannotMigrateAnExecutingRun()
+PASS   : SimulatorTests::failedStateLoadReleasesEndpoint()
+PASS   : SimulatorTests::corruptStateFailsClosed()
+PASS   : SimulatorTests::cleanupTestCase()
+Totals: 12 passed, 0 failed, 0 skipped, 0 blacklisted, 4709ms
+********* Finished testing of SimulatorTests *********

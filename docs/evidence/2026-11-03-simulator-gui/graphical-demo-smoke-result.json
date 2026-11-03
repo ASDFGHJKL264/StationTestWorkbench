@@ -1,0 +1,8 @@
+{
+  "powershell": "Windows PowerShell 5.1",
+  "graphicalSimulatorProcesses": 1,
+  "clientProcesses": 1,
+  "launcherExitCode": 0,
+  "simulatorClosedWithClient": true,
+  "evidenceDirectory": "D:\\demoqt6\\StationTestWorkbench\\build\\graphical-demo-smoke-88cb3703de8c4086adedea7a791502d0"
+}

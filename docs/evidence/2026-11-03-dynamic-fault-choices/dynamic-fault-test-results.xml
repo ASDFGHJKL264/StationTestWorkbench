@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="Win32-ninja"
+	tests="10"
+	failures="0"
+	disabled="0"
+	skipped="0"
+	hostname="hgk"
+	time="46"
+	timestamp="2026-11-03T17:40:53"
+	>
+	<testcase name="ProtocolTests" classname="ProtocolTests" time="0.0506309" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="DomainTests" classname="DomainTests" time="0.0342684" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="RepositoryTests" classname="RepositoryTests" time="1.77803" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="ModelTests" classname="ModelTests" time="0.618306" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="WorkflowTests" classname="WorkflowTests" time="19.8812" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="WindowTests" classname="WindowTests" time="1.63194" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="SimulatorTests" classname="SimulatorTests" time="8.86465" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="SimulatorWindowTests" classname="SimulatorWindowTests" time="9.71958" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="LoggerTests" classname="LoggerTests" time="0.524518" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="ProcessTests" classname="ProcessTests" time="3.35794" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+</testsuite>

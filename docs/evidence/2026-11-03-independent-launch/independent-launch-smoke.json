@@ -1,0 +1,24 @@
+{
+  "date": "2026-11-03",
+  "windowsPowerShellVersion": "5.1.26100.9711",
+  "package": "D:\\demoqt6\\StationTestWorkbench\\dist\\StationTestWorkbench-0.1.0-win64",
+  "sourceAndPackagedLauncherHashMatch": true,
+  "qtPlatform": "windows",
+  "pathIsolated": true,
+  "clientOnlyLaunch": true,
+  "automaticSimulatorProcesses": 0,
+  "clientLaunchedBeforeSimulator": true,
+  "connectedStations": 4,
+  "clientExitCode": 0,
+  "simulatorSurvivedClientExit": true,
+  "simulatorExitCode": 0,
+  "databaseAndLoggerReady": true,
+  "existingClientProcessIds": [
+    18944
+  ],
+  "existingSimulatorProcessIds": [
+    24688
+  ],
+  "existingProcessesNotTerminated": true,
+  "evidenceDirectory": "D:\\demoqt6\\StationTestWorkbench\\build\\independent-launch-af1645923cd241689cab84993e6aa35c"
+}
