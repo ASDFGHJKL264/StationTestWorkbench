@@ -1,5 +1,6 @@
 ﻿param(
     [string]$ProgramDirectory='',
+    [string]$SimulatorProgramDirectory='',
     [string]$DataDirectory='',
     [ValidateRange(1,4)][int]$Stations=4,
     [ValidateRange(1024,65532)][int]$BasePort=46501,
@@ -16,14 +17,19 @@ if(!$ProgramDirectory) {
     else {$ProgramDirectory=Join-Path $projectRoot 'build/quality'}
 }
 if(!$DataDirectory) {$DataDirectory=Join-Path $projectRoot 'demo-data'}
+if(!$SimulatorProgramDirectory) {
+    $simulatorRoot=Join-Path (Split-Path $projectRoot -Parent) 'StationSimulator'
+    if(Test-Path -LiteralPath (Join-Path $simulatorRoot 'StationSimulator.exe')) {$SimulatorProgramDirectory=$simulatorRoot}
+    else {$SimulatorProgramDirectory=Join-Path $simulatorRoot 'build/quality'}
+}
 $client=Join-Path $ProgramDirectory 'StationTestWorkbench.exe'
-$simulator=Join-Path $ProgramDirectory 'StationSimulator.exe'
-if(!(Test-Path -LiteralPath $client) -or !(Test-Path -LiteralPath $simulator)) {throw 'Build the project or use the portable package first.'}
+$simulator=Join-Path $SimulatorProgramDirectory 'StationSimulator.exe'
+if(!(Test-Path -LiteralPath $client) -or !(Test-Path -LiteralPath $simulator)) {throw 'Build both independent projects, or specify -ProgramDirectory and -SimulatorProgramDirectory.'}
 [void][IO.Directory]::CreateDirectory($DataDirectory)
 $ownedProcesses=[Collections.Generic.List[Diagnostics.Process]]::new()
 $oldPath=$env:PATH
 try {
-    $env:PATH="$ProgramDirectory;$CompilerBin;$QtPrefix/bin;$oldPath"
+    $env:PATH="$ProgramDirectory;$SimulatorProgramDirectory;$CompilerBin;$QtPrefix/bin;$oldPath"
     if($HeadlessSimulators -or $SmokeExitMs -gt 0) {
         # Automated deployment checks retain four independent, non-graphical station processes.
         for($station=1;$station -le $Stations;$station++) {
@@ -46,7 +52,12 @@ try {
     $windowStyle='Normal'
     if($SmokeExitMs -gt 0) {$arguments+=@('--smoke-exit-ms',"$SmokeExitMs");$windowStyle='Hidden'}
     $window=Start-Process -FilePath $client -ArgumentList $arguments -PassThru -WindowStyle $windowStyle
-    try {$window.WaitForExit()} finally {$window.Dispose()}
+    try {
+        if($SmokeExitMs -gt 0) {
+            if(!$window.WaitForExit($SmokeExitMs+10000)) {$window.Kill();$window.WaitForExit();throw 'Joint demo startup check timed out.'}
+        } else {$window.WaitForExit()}
+        if($window.ExitCode -ne 0) {throw "Client exited with code $($window.ExitCode)."}
+    } finally {$window.Dispose()}
 } finally {
     # Stop only the simulators owned by this launch. Let graphical workers close normally first.
     foreach($process in $ownedProcesses) {

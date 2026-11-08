@@ -15,28 +15,35 @@ function Run-Checked([string]$Executable,[string[]]$Arguments) {
 }
 try {
     $env:PATH="$CompilerBin;$QtPrefix/bin;$oldPath"
-    Run-Checked $CMake @('-S',$projectRoot,'-B',$build,'-G','Ninja',"-DCMAKE_MAKE_PROGRAM=$Ninja", "-DCMAKE_CXX_COMPILER=$CompilerBin/g++.exe", "-DCMAKE_PREFIX_PATH=$QtPrefix",'-DCMAKE_BUILD_TYPE=Release','-DBUILD_TESTING=OFF')
+    Run-Checked $CMake @('-S',$projectRoot,'-B',$build,'-G','Ninja',"-DCMAKE_MAKE_PROGRAM=$Ninja", "-DCMAKE_CXX_COMPILER=$CompilerBin/g++.exe", "-DCMAKE_PREFIX_PATH=$QtPrefix",'-DCMAKE_BUILD_TYPE=Release','-DBUILD_TESTING=OFF','-DWORKBENCH_ENABLE_SIMULATOR_TESTS=OFF')
     Run-Checked $CMake @('--build',$build,'--parallel','4')
     [void][IO.Directory]::CreateDirectory($package)
-    foreach($name in @('StationTestWorkbench.exe','StationSimulator.exe')) {
+    foreach($name in @('StationTestWorkbench.exe')) {
         $source=Join-Path $build $name
         $destination=Join-Path $package $name
         # An unchanged running client does not need to be overwritten during simulator updates.
         $identical=(Test-Path -LiteralPath $destination) -and ((Get-FileHash -LiteralPath $source).Hash -eq (Get-FileHash -LiteralPath $destination).Hash)
         if(!$identical) {Copy-Item -LiteralPath $source -Destination $destination -Force}
     }
-    foreach($name in @('StationTestWorkbench.exe','StationSimulator.exe')) {
+    foreach($name in @('StationTestWorkbench.exe')) {
         Run-Checked (Join-Path $QtPrefix 'bin/windeployqt.exe') @('--release','--compiler-runtime','--no-translations','--no-system-d3d-compiler','--no-opengl-sw',(Join-Path $package $name))
     }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination $package -Force
     Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $package -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $projectRoot 'recipes') -Destination $package -Recurse -Force
-    foreach($name in @('启动主程序.cmd','启动演示.cmd')) {
+    foreach($name in @('启动主程序.cmd')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $package -Force
     }
     [void][IO.Directory]::CreateDirectory((Join-Path $package 'scripts'))
-    foreach($name in @('start-client.ps1','start-demo.ps1')) {
+    foreach($name in @('start-client.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $package 'scripts') -Force
+    }
+    # Retire only known legacy bundle files; preserve runtime data and other package files.
+    $packageRoot=[IO.Path]::GetFullPath($package).TrimEnd('\')+'\'
+    foreach($relative in @('StationSimulator.exe','启动演示.cmd','scripts/start-demo.ps1')) {
+        $legacy=[IO.Path]::GetFullPath((Join-Path $package $relative))
+        if(!$legacy.StartsWith($packageRoot,[StringComparison]::OrdinalIgnoreCase)) {throw 'Invalid legacy package path.'}
+        if(Test-Path -LiteralPath $legacy -PathType Leaf) {Remove-Item -LiteralPath $legacy -Force}
     }
     # Keep local demonstration data on disk, but never put it into the distributable ZIP.
     $runtimeDirectories=@('demo-data','simulator-data','standalone-simulator-data')

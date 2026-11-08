@@ -24,13 +24,6 @@ function Start-Isolated([string]$FileName,[string]$Arguments) {
     return $process
 }
 try {
-    for($station=1;$station -le 4;$station++) {
-        $path=Join-Path $data "station-$station"
-        $arguments='--headless --port {0} --station-id {1} --data-dir "{2}"' -f ($BasePort+$station-1),$station,$path
-        $owned.Add((Start-Isolated 'StationSimulator.exe' $arguments))
-    }
-    Start-Sleep -Milliseconds 300
-    foreach($process in $owned) {if($process.HasExited) {throw 'Packaged simulator failed to start.'}}
     $clientPath=Join-Path $data 'client'
     $arguments='--base-port {0} --stations 4 --data-dir "{1}" --smoke-exit-ms 2000' -f $BasePort,$clientPath
     $client=Start-Isolated 'StationTestWorkbench.exe' $arguments
@@ -43,7 +36,7 @@ try {
     if(!(Test-Path -LiteralPath $database) -or !(Test-Path -LiteralPath $log)) {throw 'Packaged database/log initialization failed.'}
     $logText=[IO.File]::ReadAllText($log,[Text.Encoding]::UTF8)
     if(!$logText.Contains('数据库就绪')) {throw 'No successful Qt SQLite initialization evidence in packaged log.'}
-    $report=[ordered]@{clientExitCode=0;simulatorProcesses=4;databaseCreated=$true;sqliteReady=$true;qtOnPath=$false;package=$ProgramDirectory;evidenceDirectory=$data}
+    $report=[ordered]@{clientExitCode=0;simulatorProcesses=0;databaseCreated=$true;sqliteReady=$true;qtOnPath=$false;package=$ProgramDirectory;evidenceDirectory=$data}
     $report | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $projectRoot 'build/portable-smoke-result.json') -Encoding UTF8
     $report | ConvertTo-Json
 } finally {

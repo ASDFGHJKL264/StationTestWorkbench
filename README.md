@@ -2,152 +2,88 @@
 
 **电子模块多工位功能测试与质量追溯工作台**，Qt 6 Widgets / C++17 / TCP / SQLite。
 
-这是独立项目，源码位于 `D:\demoqt6\StationTestWorkbench`。它从 TCP 设备监控进一步转向“产品测试流程”：对一个 SN 使用一个确定的配方版本，执行有起点和终点的测试，分开处理命令受理、执行终态、质量判定、归档提交和工位确认。
+本工程只构建操作员主程序。模拟器已经拆为同级独立工程 `D:\demoqt6\StationSimulator`，有自己的源码、CMake、测试、启动脚本和便携包。两个程序在运行时通过 TCP 通信，主程序的默认构建和测试不需要模拟器源码。
 
-目前是可运行、可测试的模拟工位版本。电压、电流、IO 数值由模拟器生成；默认限值是演示配方，不是产品检验标准，也没有宣称完成真实电气测量。
-
-![界面](docs/workbench-preview.png)
-
-主程序和模拟器均使用简洁的浅灰白工具界面。工位状态、测试步骤、记录查询和日志按功能排列；测试编号放在选中详情中，表格优先显示日常操作信息。
+目前使用模拟工位验证业务流程；电压、电流和 IO 数值由模拟器生成，默认限值是演示配方。
 
 ## 直接运行
 
-主程序和模拟器默认独立启动，分别关闭，互不启动或结束对方。
+双击 `启动主程序.cmd`，只打开操作员主程序。默认连接本机 46501～46504 端口；未启动模拟器时显示离线，随后启动工位会自动尝试连接。
 
-- 桌面“多工位功能测试与追溯”或便携包内的 `启动主程序.cmd`：只打开主程序。没有启动模拟器时，工位显示未连接；随后启动模拟工位，主程序会自动尝试连接。
-- 桌面“多工位设备模拟器”：只打开图形模拟器，点击“启动全部”开始监听。便携包也可以直接双击 `StationSimulator.exe`，其默认数据目录见下文。
+模拟器在另一工程中编译并通过其 `启动模拟器.cmd` 独立启动，点击“启动全部”开始监听。也可直接运行 `StationSimulator.exe`，详细配置见模拟器工程 README。两个程序分别关闭。
 
-主程序的独立启动入口继续使用原来的 `demo-data/client`，保留已有记录；桌面模拟器继续使用 `demo-data/station-N`。默认 TCP 端口为46501～46504。开发目录需要先构建，再使用 `启动主程序.cmd`。
+在工位表选择一个工位，输入产品 SN 和配方，点击“开始测试”。步骤逐项更新；测试完成后分别显示质量判定、归档提交和工位确认。取消操作等待工位返回真实终态。历史查询按完整 SN 精确匹配，留空查询全部，每页最多100条，采用 ID 游标翻页。
 
-可选的 `启动演示.cmd` 是明确的联合演示入口：同时打开一个**Qt 图形工位模拟器面板**和一个客户端，退出客户端时关闭本次脚本启动的模拟器。日常分别启动使用前面的两个入口，不要同时运行联合演示以免端口和数据库冲突。模拟器的网络、计时器与状态文件在专用工作线程处理。
+历史记录页支持两种导出：
 
-桌面模拟器及联合演示的默认演示行为如下（直接双击裸模拟器默认全部正常）：
+- “导出本次报告”：导出所选运行的 HTML 报告，包含身份、配方快照哈希、限值、步骤与未执行项。
+- “导出异常 SN”：读取全部已归档 FAIL 记录，按 SN 去重导出 UTF-8 BOM CSV，不受当前查询和分页限制。复测 PASS 不抹除历史 FAIL；取消、未知和未归档运行不作为失败记录。没有异常时输出 SN 表头，成功后日志显示数量。表格软件导入时将 SN 列设为文本可保留前导零。
 
-- 工位 1、2：正常值，预期 PASS。
-- 工位 3：电流超限，预期 FAIL。
-- 工位 4：丢弃第一次归档 ACK，观察自动重试；事务提交后要等工位确认才能再次开始。
-
-在工位表中选一个工位，输入产品 SN，选择配方，点击“开始测试”。步骤表逐步更新，最终显示判定和归档状态。取消需要等待工位返回取消终态，不会把按钮点击直接当成停止成功。历史查询使用**完整 SN 精确匹配**，留空查询全部；每页最多 100 条，采用 ID 游标翻页。选中历史记录可导出 HTML 测试报告，包含配方快照哈希、限值、步骤和未执行项；生成文件和查询均在数据库线程执行。
-
-以下参数示例属于可选联合演示脚本。如果脚本提示端口占用，关闭先前演示，或使用其他端口：
+两个工程均已构建后，可选的 `启动演示.cmd` 从同级模拟器工程启动模拟器和客户端，退出本次客户端时结束该脚本启动的模拟器。联合演示默认工位3电流超限、工位4丢弃首次归档确认。它只作为源码目录中的辅助入口，不包含在主程序独立便携包内。
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -BasePort 47501
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1
+# 使用分别解压的便携目录时，显式指定模拟器位置：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -SimulatorProgramDirectory D:\demoqt6\StationSimulator\dist\StationSimulator-0.1.0-win64
 ```
 
-关闭故障注入、只开两个正常工位：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -Stations 2 -FailStation 0
-```
-
-联合脚本可通过 `-DataDirectory 'D:\StationDemoData'` 指定演示数据根目录，客户端放在其 `client` 子目录；`start-client.ps1` 的同名参数则直接指定客户端数据目录。不要让两个客户端使用同一个目录同时运行；当前版本按单客户端控制设计。模拟器只监听本机回环地址。
-
-## 图形模拟器怎么用
-
-![图形模拟器](docs/simulator-preview.png)
-
-双击 `StationSimulator.exe` 打开四工位面板，点击“启动全部”后等待主程序连接。该图形入口默认将状态保存到 Qt 的 `AppLocalDataLocation`（本机应用数据目录）下的 `station-N`；桌面模拟器传入 `--data-dir ...\demo-data`，延续原联合演示的状态目录，并保留工位3电流超限、工位4丢弃首次归档确认的演示设置。需要在便携包中使用相同设置，可以运行：
-
-```powershell
-.\StationSimulator.exe --stations 4 --port 46501 --data-dir .\demo-data --step-ms 400 --fail-station 3 --demo-faults
-```
-
-主程序选工位、输入产品 SN 和配方后开始测试；模拟器显示接收的任务、逐项生成值、结果确认与连接变化。单独模拟器入口不会启动操作员主程序；希望同时打开两者时使用 `启动演示.cmd`，不要重复启动同一组端口。
-
-主程序选中工位和配方后，会通过TCP同步只读配方预览；模拟器“异常数值”下拉框按该配方的步骤名称自动生成选项，新项目在第一次测试前即可选择，无需先跑一次正常测试。每个工位保留各自的预览，断线重连后重新同步。异常选项下方显示配方版本；实际任务表仍显示本次/上次测试的原始配方和结果。
-
-选中工位可以修改单步耗时、注入超限项目、勾选“丢弃首次归档确认”，并应用设置。执行中和终态未确认时禁止改动故障配置，防止同一次测试中途改变规则；此时选中新配方只缓存预览，结算后再更新异常选项。若原异常步骤不在新配方中，会明确标记“当前配方未包含”，需要重新选择并应用，避免界面与实际故障设置不一致。“断开客户端”只切断网络，工位仍继续模拟执行，供主程序重连核对；“停止工位”则停止监听和执行，保留状态文件，下次启动按中断恢复，不能当作正常完成。
-
-数值全部由程序生成，步骤表中的范围来自本次任务绑定的配方。日志仅保留最近500条，帮助观察启动、握手、步骤、重连与归档确认。
-
-自动化或需要四个独立进程时，使用：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -HeadlessSimulators
-.\StationSimulator.exe --headless --station-id 1 --port 46501 --data-dir D:\StationDemoData\station-1
-```
-
-图形面板支持 `--stations 4 --port 46501 --data-dir D:\StationDemoData --auto-start`。显式指定 `--station-id 1` 时只显示该工位，`--data-dir`直接作为该工位状态目录；多工位模式自动使用目录下的`station-N`。`--smoke-exit-ms`仅用于部署验证自动关闭。
+联合演示可通过 `-BasePort` 更换端口，`-Stations 2 -FailStation 0` 关闭异常示例，`-HeadlessSimulators` 使用独立后台进程。`-DataDirectory` 为联合演示指定数据根目录；不要让两个客户端同时使用同一数据目录。
 
 ## 构建与验证
 
-用 Qt Creator 打开根目录 `CMakeLists.txt`，选择 Qt 6 MinGW 64 位套件。需要 Qt Core、Network、Sql、Widgets；测试另外需要 Qt Test。已验证环境：Windows x64，Qt 6.10.3，MinGW 13.1.0，CMake / Ninja。
-
-构建后有两个程序：
-
-| 程序 | 用途 |
-|---|---|
-| `StationTestWorkbench.exe` | 操作员界面、网络引擎、数据库和日志后台 |
-| `StationSimulator.exe` | Qt 图形模拟器，管理1～4个 TCP 工位；支持 `--headless` 单工位后台模式 |
-
-自动构建和测试：
+在 Qt Creator 中打开根目录 `CMakeLists.txt`，选择 Qt 6 MinGW 64位套件。主程序需要 Core、Network、Sql、Widgets，测试额外需要 Qt Test。
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -BatchRuns 1000
+# 独立构建及7组测试，不要求模拟器源码存在：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -BatchRuns 100
+
+# 另外启用两项目联调，执行10组工作台测试：
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -WithSimulator -BatchRuns 100
 ```
 
-脚本里的工具路径可通过参数覆盖，不修改系统 PATH。测试结果在 `build/quality/*-results.txt` 和 `test-results.xml`。测试使用临时目录和本机 TCP，不写入演示或原项目的数据。
+联调默认读取同级 `StationSimulator`；非同级布局可通过 `-SimulatorSourceDirectory` 指定。Qt Creator 中也可设置 `WORKBENCH_ENABLE_SIMULATOR_TESTS=ON` 和 `STATION_SIMULATOR_SOURCE_DIR`。只有这些可选测试会导入模拟器目标，生产主程序不链接模拟器。
 
-10万轮次历史数据的独立性能测量：
+测试使用临时目录与本机 TCP，不写入演示数据。原模拟器设备测试迁到独立工程，跨项目窗口、配方预览及四独立进程回归保留在 `tests/integration/`。结果位于 `build/quality/*-results.txt` 和 JUnit 报告。
+
+10万轮次历史数据的独立查询性能测量：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\benchmark.ps1 -Rows 100000
 ```
 
-基准临时生成10万运行、30万步骤，测量200次完整SN查询和100次百行游标查询。报告包含P50/P95、主事件循环间隔和进程内存；数据准备采用批量SQL，不作为生产写入性能。
-
-生成包含 Qt 运行库的便携包：
+## 独立便携包
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-portable.ps1
 ```
 
-产物位于 `dist/StationTestWorkbench-0.1.0-win64.zip`。这是解压运行的便携包。当前提交不修改原 TCP、温湿度程序或它们的安装包。
+主程序包位于 `dist/StationTestWorkbench-0.1.0-win64.zip`，只包含工作台及所需 Qt 运行库。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite 与日志初始化正常。
 
-## 工程上实际实现了什么
+## 配方与一致性
 
-1. **先留测试身份，再发动作。** 创建 UUID runId，绑定 SN、工位、配方内容及版本；数据库预约成功后才发送 start。同一个未结算 SN 无法在两个工位同时执行，复测使用新的 runId。
-2. **命令受理与质量结果分开。** accepted 只说明工位受理；completed 才表示执行结束；PASS/FAIL 由本地根据该次测试保存的配方限值计算。
-3. **终态事务与确认闭环。** 结果、各步骤、判定和运行终态在一个 SQLite 事务中提交；提交成功才发 resultAck，工位持久化确认后回复 resultConfirmed。确认前阻止下一次测试。
-4. **重复结果幂等、冲突结果拒绝。** runId 是唯一键；相同测量终态不增加记录，不同内容不覆盖已有结果。协议 CRC 用于传输错误检测，不作为身份认证。
-5. **断线后查询已有测试。** TCP 会话和测试身份分开；重连后按 runId 查询，保持原身份，不盲目重发 start。客户端重启保留待核对的 SN / 工位占用；模拟器执行中重启明确返回未知，不伪造 PASS。
-6. **后台线程和有界资源。** GUI 只处理模型与交互；网络、SQLite、日志文件各有自己的工作线程。接收、发送、待存结果、日志和历史页均有限额，保存失败保留占用并重试。
-7. **可复现故障验证。** 真实 SQLite 写锁、插入失败回滚、错序/错误身份、重复终态、ACK 丢失、客户端恢复和独立工位进程均有测试。
+内置 `demo-5v-v1` 包含输出电压、待机电流、IO 回环。“发布配方”可以加载 `recipes/demo-5v-v2.json` 或新增启动耗时步骤的 `recipes/demo-5v-startup-v1.json`。模拟器按 TCP 配方预览更新异常选项，无需先执行一次测试。
 
-对应结构和取舍见 [架构与协议](docs/ARCHITECTURE.md)，实测数据和未验证边界见 [验证记录](docs/VALIDATION.md)。
+每个配方步骤包含 `id`、`label`、`unit`、`min`、`max`、`nominal`，满足 `min <= nominal <= max`，最多16步。限值包含端点，步骤顺序参与契约。已发布版本不可原地修改，同版本同内容发布为幂等操作；运行另存完整配方快照，历史结果不随新配方变化。
 
-2026-11-02验证记录包含自动化用例、1000次测试归档全量核对、四独立工位进程、10万轮次历史性能及隔离PATH便携包启动。具体结果见验证记录；模拟器测试和实物测量证据分开记录。
+程序先创建 UUID runId 并持久化产品 SN、工位和配方，再发送 start。同一未结算 SN 不会同时在多个工位执行。accepted 只表示受理，终态的 PASS/FAIL 由本地配方规则重新计算。结果、步骤、判定和运行终态在同一事务提交后，才发送 resultAck，并等待工位持久化确认后放开下一次测试。
 
-## 配方版本
+相同 runId 的重复终态不会增加记录，冲突终态不覆盖已有结果。断线后按原 runId 查询，不盲目重复 start；客户端重启继续保留未核对身份的占用。存储失败保留终态并重试，数据库、网络和日志文件分别在后台线程处理。
 
-内置 `demo-5v-v1` 包含输出电压、待机电流、IO 回环。使用“发布配方”选择 `recipes/demo-5v-v2.json` 可以发布示例新版本。
-
-验证动态异常选项可发布 `recipes/demo-5v-startup-v1.json`：在主程序选择该配方及工位后，模拟器选中同一工位，下拉会新增“启动耗时超限”。选中它并“应用设置”，再输入SN开始测试，启动耗时将生成超出500ms上限的演示数值并判FAIL；这些数值由模拟器生成。
-
-每个步骤有 `id`、`label`、`unit`、`min`、`max`、`nominal`：`min/max` 是包含端点的判定范围；`nominal` 仅供模拟器生成正常示例值。步骤顺序参与测试契约。运行保存完整快照，历史结果不跟随后来配方变化。
-
-同版本同内容重复发布为幂等操作；同版本不同内容拒绝。要改限值必须发布新版本。最多 16 步，数值必须有限，必须满足 `min <= nominal <= max`。
+协议仍为 STW2 v2。两工程分别维护配方校验及编解码实现；修改线上契约时需同步两端并运行跨项目回归。CRC 用于传输差错检测。更多说明见 [架构与协议](docs/ARCHITECTURE.md)、[业务分包说明](docs/PROJECT_STRUCTURE.md)、[验证记录](docs/VALIDATION.md)。
 
 ## 文件与数据
 
 ```text
-src/core         配方、身份校验、本地质量判定
-src/protocol     有界组帧、CRC、拆包与重同步
-src/runtime      控制器、网络测试状态机、异步日志
-src/storage      独立线程 SQLite 连接、事务、恢复与游标查询
-src/ui           QAbstractTableModel / 代理 / Widgets 界面
-src/simulator    图形模拟器、专用工位线程、后台模式与持久化待确认结果
-tests            协议、领域、存储、模型、日志、流程、窗口、进程测试
-scripts          构建验证、演示启动、便携包生成
+src/apps         操作员主程序入口
+src/testing      配方、身份、质量判定与测试执行状态机
+src/traceability SQLite事务、恢复、历史、HTML与异常SN导出
+src/workbench    应用协调、操作员窗口和表格模型
+src/shared       主程序通信协议、异步日志和界面样式
+tests/integration 可选的跨项目联调测试
+scripts          主程序验证、启动、打包及可选联合演示
 ```
 
-`启动主程序.cmd`、桌面主程序快捷方式和联合演示脚本使用相同的 `demo-data/client/data/workbench.db` 保存配方、测试身份、测量值、判定与追溯记录；`demo-data/client/logs/workbench.log` 保存运行日志，单文件约 5 MiB，保留 9 份归档；`demo-data/station-N/station-N.json` 保存对应模拟器的当前/最近一次执行和待确认终态。
+`启动主程序.cmd` 继续使用 `demo-data/client/data/workbench.db` 和 `demo-data/client/logs/workbench.log`。模拟器代码拆分不搬迁已有数据库、日志和工位状态文件。新模拟器启动脚本默认使用自己的 `demo-data`；继续使用原工位状态时，可对模拟器显式指定原目录。
 
-直接运行客户端时，默认使用 Qt 的 AppDataLocation；`--data-dir` 可覆盖。运行目录、数据库、日志、构建产物和常见密钥文件已放入 `.gitignore`。这里不需要任何云密钥或 GitHub token。
-
-## 与温湿度项目的组合
-
-温湿度项目用于说明真实串口 RTU 接线采集、连续时序数据、曲线和监测告警。本项目用于说明多工位 TCP 控制、有限测试流程、产品身份、版本化配方、质量终态和追溯一致性。
-
-本项目通信及日志的一部分设计借鉴了原 TCP 项目；原项目保留。面试时应展示能复现的故障和测试证据，并能解释代码。尚未接入实际测试仪器、PLC 或治具，尚无长期现场运行、真实干扰和断电耐久证据，不应把模拟测试描述成工业交付经历。
+裸客户端默认使用 Qt AppDataLocation，`--data-dir` 可覆盖。原温湿度、串口和其他 Qt 工程均独立保留。本项目尚未接入实际测试仪器、PLC 或治具，模拟验证不代表真实电气检测交付。

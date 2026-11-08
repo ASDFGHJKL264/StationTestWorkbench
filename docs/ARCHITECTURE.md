@@ -1,5 +1,13 @@
 # 架构与协议
 
+## 业务包与依赖
+
+本工程源码按 `testing`（测试业务）、`traceability`（质量追溯）、`workbench`（操作工作台）、`shared`（公共设施）组织，`apps` 只装配操作员主程序入口。模拟器已迁至同级独立工程 `D:\demoqt6\StationSimulator`；各自的默认构建和测试互不依赖。完整目录和修改导航见 [业务分包说明](PROJECT_STRUCTURE.md)。
+
+`StationEndpoint` 属于测试业务，`TestEngine` 通过它接收连接配置，不引用工作台控制器。`WorkbenchApplication` 统一连接测试引擎、追溯存储和异步日志；网络、数据库及日志仍分别拥有自己的工作线程。模拟工位的配置、设备线程和窗口由另一工程自行维护。
+
+通信协议和日志只依赖 Qt Core，主程序样式作为独立界面目标。模拟器拥有自己的配方契约、协议和样式实现，使用独立命名空间；在线 STW2 格式保持一致。只有显式启用的跨项目测试会导入模拟器目标，生产主程序不链接这些目标。两个工程分别输出程序、验证报告和便携包。
+
 ## 一次测试按什么顺序执行
 
 ```mermaid
@@ -37,12 +45,14 @@ sequenceDiagram
 | 网络线程 | TestEngine、各 QTcpSocket、计时器、Parser | 在线程启动后创建 socket；停止 timer/socket 后退出 |
 | 数据库线程 | Repository、唯一 QSqlDatabase 连接 | 连接只在归属线程创建、访问、关闭和移除 |
 | 日志线程 | LogFileWorker | 文件创建、写入、轮转和 flush 均在该线程 |
-| 模拟器 GUI 主线程 | SimulatorWindow、工位表、步骤表和有界日志 | 排队下发控制，快照按值返回；无网络或状态文件I/O |
-| 模拟器专用工作线程 | SimulatorWorker、StationServer、socket、计时器、QSaveFile | 线程内创建和销毁；小状态文件原子替换；后台模式为单独QCoreApplication进程 |
+| 独立模拟器 GUI 主线程（另一工程） | SimulatorWindow、工位表、步骤表和有界日志 | 排队下发控制，快照按值返回；无网络或状态文件I/O |
+| 独立模拟器工作线程（另一工程） | SimulatorWorker、StationServer、socket、计时器、QSaveFile | 线程内创建和销毁；小状态文件原子替换；后台模式为单独QCoreApplication进程 |
 
 信号/槽跨线程使用 Qt 排队连接，JSON 值按值传递。退出先停止网络接入，再排空已进入数据库队列的工作，最后排空文件日志；不使用 `QThread::terminate`。退出等待只发生在关闭流程，运行时查询和日志 I/O 不阻塞 GUI。
 
 报告导出同样排队到Repository，按runId读取运行快照和各步骤，用QSaveFile原子输出HTML。取消/未知运行将未执行步骤明确显示为空，身份和配方文本先做HTML转义。GUI只负责文件路径对话框。判定列使用QStyledItemDelegate显示普通状态文字，保留少量语义文字颜色；选择、排序与可访问性仍使用模型文本。
+
+异常 SN 导出也在追溯包的数据库线程中执行：读取全部已归档 FAIL 记录、按 SN 去重，逐行写入带 UTF-8 BOM 的 CSV。它不依赖界面当前查询和分页，复测 PASS 不抹除历史 FAIL；取消、未知及未归档运行不作为失败记录。文件通过 QSaveFile 原子替换，只有成功提交文件后才报告导出数量。
 
 ## 身份、恢复与版本
 
@@ -102,6 +112,8 @@ CRC 检测随机传输损坏，不能抵御恶意伪造。本地模拟器监听 
 模拟器的 QSaveFile 和 SQLite 事务能覆盖已测试的进程恢复与写入失败；没有测试物理断电、磁盘控制器缓存或文件系统损坏，不承诺这类条件下的持久化等级。UI 的 PASS 是按保存的示例限值计算，不代表完成真实检测设备标定。
 
 ## 图形模拟器边界（2026-11-03）
+
+以下记录描述的模拟器行为在拆分后继续保留，相关源码及独立测试位于 `D:\demoqt6\StationSimulator`。工作台的默认 CMake 不构建模拟器；可选联调覆盖两工程的实际 TCP 与图形交互。
 
 StationSimulator默认打开Qt Widgets面板，SimulatorController向专用QThread中的worker排队。StationServer在该线程内创建，其QTcpServer、QTimer和QSaveFile操作均属于该线程；界面只接收只读JSON快照与有界业务日志。1～4个工位共享一个模拟器工作线程，各自拥有端口、状态文件与测试身份。`--headless`保留单工位无窗口模式，原四独立进程测试继续使用它。
 
