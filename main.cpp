@@ -1,5 +1,5 @@
-#include "workbench/ui/mainwindow.h"
-#include "testing/stationendpoint.h"
+#include "mainwindow.h"
+#include "stationendpoint.h"
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QStandardPaths>

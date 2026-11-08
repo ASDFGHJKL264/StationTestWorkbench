@@ -1,4 +1,4 @@
-#include "workbench/application/workbenchcontroller.h"
+#include "workbenchcontroller.h"
 #include <QtTest>
 #include <QProcess>
 #include <QTcpServer>

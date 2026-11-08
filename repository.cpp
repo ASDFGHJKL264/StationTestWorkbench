@@ -1,5 +1,5 @@
 #include "repository.h"
-#include "testing/domain.h"
+#include "domain.h"
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>

@@ -1,8 +1,8 @@
 #include "mainwindow.h"
-#include "workbench/application/workbenchcontroller.h"
+#include "workbenchcontroller.h"
 #include "models.h"
-#include "shared/widgets/toolstyle.h"
-#include "testing/domain.h"
+#include "toolstyle.h"
+#include "domain.h"
 #include <QAbstractItemView>
 #include <QComboBox>
 #include <QFile>

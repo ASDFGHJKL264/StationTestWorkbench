@@ -1,2 +1,0 @@
-add_executable(StationTestWorkbench WIN32 workbench/main.cpp)
-target_link_libraries(StationTestWorkbench PRIVATE WorkbenchWidgets)

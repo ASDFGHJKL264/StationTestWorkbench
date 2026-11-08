@@ -1,12 +1,12 @@
 # 架构与协议
 
-## 业务包与依赖
+## 目录与依赖
 
-本工程源码按 `testing`（测试业务）、`traceability`（质量追溯）、`workbench`（操作工作台）、`shared`（公共设施）组织，`apps` 只装配操作员主程序入口。模拟器已迁至同级独立工程 `D:\demoqt6\StationSimulator`；各自的默认构建和测试互不依赖。完整目录和修改导航见 [业务分包说明](PROJECT_STRUCTURE.md)。
+本工程沿用温湿度项目 `Qwenshiducaiji` 的目录风格：源码平铺在根目录，测试平铺在 `tests/`，由根 `CMakeLists.txt` 统一定义运行逻辑库 `WorkbenchRuntime`、界面库 `WorkbenchWidgets`、入口和测试。模拟器位于同级独立工程 `D:\demoqt6\StationSimulator`；各自的默认构建和测试互不依赖。完整目录和修改导航见 [目录与业务职责](PROJECT_STRUCTURE.md)。
 
-`StationEndpoint` 属于测试业务，`TestEngine` 通过它接收连接配置，不引用工作台控制器。`WorkbenchApplication` 统一连接测试引擎、追溯存储和异步日志；网络、数据库及日志仍分别拥有自己的工作线程。模拟工位的配置、设备线程和窗口由另一工程自行维护。
+`StationEndpoint` 属于测试业务，`TestEngine` 通过它接收连接配置，不引用工作台控制器。`WorkbenchController` 统一连接测试引擎、追溯存储和异步日志；这些类归入 `WorkbenchRuntime`，网络、数据库及日志分别拥有自己的工作线程。模拟工位的配置、设备线程和窗口由另一工程自行维护。
 
-通信协议和日志只依赖 Qt Core，主程序样式作为独立界面目标。模拟器拥有自己的配方契约、协议和样式实现，使用独立命名空间；在线 STW2 格式保持一致。只有显式启用的跨项目测试会导入模拟器目标，生产主程序不链接这些目标。两个工程分别输出程序、验证报告和便携包。
+通信协议和日志实现只使用 Qt Core；运行逻辑库统一链接 Core、Network、Sql。主窗口、模型和样式归入 `WorkbenchWidgets`，依赖运行逻辑库及 Widgets。模拟器拥有自己的配方契约、协议和样式实现，使用独立命名空间；在线 STW2 格式保持一致。只有显式启用的跨项目测试会导入模拟器目标。两个工程分别输出程序、验证报告和便携包。
 
 ## 一次测试按什么顺序执行
 
@@ -52,7 +52,7 @@ sequenceDiagram
 
 报告导出同样排队到Repository，按runId读取运行快照和各步骤，用QSaveFile原子输出HTML。取消/未知运行将未执行步骤明确显示为空，身份和配方文本先做HTML转义。GUI只负责文件路径对话框。判定列使用QStyledItemDelegate显示普通状态文字，保留少量语义文字颜色；选择、排序与可访问性仍使用模型文本。
 
-异常 SN 导出也在追溯包的数据库线程中执行：读取全部已归档 FAIL 记录、按 SN 去重，逐行写入带 UTF-8 BOM 的 CSV。它不依赖界面当前查询和分页，复测 PASS 不抹除历史 FAIL；取消、未知及未归档运行不作为失败记录。文件通过 QSaveFile 原子替换，只有成功提交文件后才报告导出数量。
+异常 SN 导出也在 Repository 的数据库线程中执行：读取全部已归档 FAIL 记录、按 SN 去重，逐行写入带 UTF-8 BOM 的 CSV。它不依赖界面当前查询和分页，复测 PASS 不抹除历史 FAIL；取消、未知及未归档运行不作为失败记录。文件通过 QSaveFile 原子替换，只有成功提交文件后才报告导出数量。
 
 ## 身份、恢复与版本
 

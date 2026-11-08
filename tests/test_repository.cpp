@@ -1,5 +1,5 @@
-#include "traceability/repository.h"
-#include "testing/domain.h"
+#include "repository.h"
+#include "domain.h"
 #include <QtTest>
 #include <QSqlQuery>
 #include <QSqlError>

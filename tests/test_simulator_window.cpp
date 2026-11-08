@@ -1,7 +1,7 @@
 #include "simulation/ui/simulatorwindow.h"
 #include "simulation/application/simulatorcontroller.h"
-#include "workbench/application/workbenchcontroller.h"
-#include "workbench/ui/mainwindow.h"
+#include "workbenchcontroller.h"
+#include "mainwindow.h"
 #include <QtTest>
 #include <QApplication>
 #include <QCheckBox>

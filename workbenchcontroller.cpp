@@ -1,8 +1,8 @@
 #include "workbenchcontroller.h"
-#include "testing/testengine.h"
-#include "traceability/repository.h"
-#include "shared/logging/asyncfilelogger.h"
-#include "testing/domain.h"
+#include "testengine.h"
+#include "repository.h"
+#include "asyncfilelogger.h"
+#include "domain.h"
 #include <QDir>
 #include <QDateTime>
 #include <QUuid>

@@ -1,4 +1,4 @@
-#include "testing/domain.h"
+#include "domain.h"
 #include <QtTest>
 #include <limits>
 

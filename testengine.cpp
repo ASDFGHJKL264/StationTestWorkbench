@@ -1,5 +1,5 @@
 #include "testengine.h"
-#include "testing/domain.h"
+#include "domain.h"
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUuid>

@@ -3,7 +3,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
-#include "shared/logging/asyncfilelogger.h"
+#include "asyncfilelogger.h"
 
 namespace
 {

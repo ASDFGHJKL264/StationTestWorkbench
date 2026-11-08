@@ -1,5 +1,5 @@
-#include "workbench/application/workbenchcontroller.h"
-#include "shared/protocol/framecodec.h"
+#include "workbenchcontroller.h"
+#include "framecodec.h"
 #include <QtTest>
 #include <QTcpServer>
 #include <QTcpSocket>

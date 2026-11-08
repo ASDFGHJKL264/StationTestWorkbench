@@ -1,7 +1,7 @@
-#include "workbench/ui/mainwindow.h"
-#include "workbench/application/workbenchcontroller.h"
-#include "traceability/repository.h"
-#include "testing/domain.h"
+#include "mainwindow.h"
+#include "workbenchcontroller.h"
+#include "repository.h"
+#include "domain.h"
 #include <QtTest>
 #include <QTemporaryDir>
 #include <QLineEdit>

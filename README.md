@@ -43,7 +43,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -WithSi
 
 联调默认读取同级 `StationSimulator`；非同级布局可通过 `-SimulatorSourceDirectory` 指定。Qt Creator 中也可设置 `WORKBENCH_ENABLE_SIMULATOR_TESTS=ON` 和 `STATION_SIMULATOR_SOURCE_DIR`。只有这些可选测试会导入模拟器目标，生产主程序不链接模拟器。
 
-测试使用临时目录与本机 TCP，不写入演示数据。原模拟器设备测试迁到独立工程，跨项目窗口、配方预览及四独立进程回归保留在 `tests/integration/`。结果位于 `build/quality/*-results.txt` 和 JUnit 报告。
+测试使用临时目录与本机 TCP，不写入演示数据。测试文件统一平铺在 `tests/`；其中 `test_window_simulator.cpp`、`test_simulator_window.cpp` 和 `test_process.cpp` 为可选跨项目回归。结果位于 `build/quality/*-results.txt` 和 JUnit 报告。
 
 10万轮次历史数据的独立查询性能测量：
 
@@ -70,20 +70,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-portable.ps1
 
 相同 runId 的重复终态不会增加记录，冲突终态不覆盖已有结果。断线后按原 runId 查询，不盲目重复 start；客户端重启继续保留未核对身份的占用。存储失败保留终态并重试，数据库、网络和日志文件分别在后台线程处理。
 
-协议仍为 STW2 v2。两工程分别维护配方校验及编解码实现；修改线上契约时需同步两端并运行跨项目回归。CRC 用于传输差错检测。更多说明见 [架构与协议](docs/ARCHITECTURE.md)、[业务分包说明](docs/PROJECT_STRUCTURE.md)、[验证记录](docs/VALIDATION.md)。
+协议仍为 STW2 v2。两工程分别维护配方校验及编解码实现；修改线上契约时需同步两端并运行跨项目回归。CRC 用于传输差错检测。更多说明见 [架构与协议](docs/ARCHITECTURE.md)、[目录与业务职责](docs/PROJECT_STRUCTURE.md)、[验证记录](docs/VALIDATION.md)。
 
 ## 文件与数据
 
 ```text
-src/apps         操作员主程序入口
-src/testing      配方、身份、质量判定与测试执行状态机
-src/traceability SQLite事务、恢复、历史、HTML与异常SN导出
-src/workbench    应用协调、操作员窗口和表格模型
-src/shared       主程序通信协议、异步日志和界面样式
-tests/integration 可选的跨项目联调测试
-scripts          主程序验证、启动、打包及可选联合演示
+CMakeLists.txt           两个库、主程序及测试的统一构建配置
+main.cpp                 操作员主程序入口
+domain.* stationendpoint.h 配方、身份、质量判定和连接配置
+testengine.*             工位通信与测试执行状态机
+repository.*             SQLite事务、恢复、历史、HTML与异常SN导出
+workbenchcontroller.*    应用协调与线程生命周期
+framecodec.* asyncfilelogger.* 通信帧与异步日志
+mainwindow.* models.* toolstyle.h 窗口、表格模型和样式
+tests/                   独立测试、可选联调及历史查询基准
+scripts/ docs/ recipes/  验证、启动、打包、说明与配方示例
 ```
 
-`启动主程序.cmd` 继续使用 `demo-data/client/data/workbench.db` 和 `demo-data/client/logs/workbench.log`。模拟器代码拆分不搬迁已有数据库、日志和工位状态文件。新模拟器启动脚本默认使用自己的 `demo-data`；继续使用原工位状态时，可对模拟器显式指定原目录。
+沿用同级温湿度项目 `Qwenshiducaiji` 的目录风格：`.h/.cpp` 平铺在根目录，测试平铺在 `tests/`，由一个根 `CMakeLists.txt` 管理。构建分为 `WorkbenchRuntime`（运行逻辑）和 `WorkbenchWidgets`（界面）两个库，对应温湿度项目的 `SensorRuntime` / `SensorWidgets`。业务职责仍按文件区分，模拟器保持同级独立工程。
+
+`启动主程序.cmd` 继续使用 `demo-data/client/data/workbench.db` 和 `demo-data/client/logs/workbench.log`。源码调整不搬迁已有数据库、日志和工位状态文件。新模拟器启动脚本默认使用自己的 `demo-data`；继续使用原工位状态时，可对模拟器显式指定原目录。
 
 裸客户端默认使用 Qt AppDataLocation，`--data-dir` 可覆盖。原温湿度、串口和其他 Qt 工程均独立保留。本项目尚未接入实际测试仪器、PLC 或治具，模拟验证不代表真实电气检测交付。

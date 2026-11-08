@@ -1,5 +1,5 @@
 #pragma once
-#include "testing/stationendpoint.h"
+#include "stationendpoint.h"
 #include <QObject>
 #include <QThread>
 #include <QJsonObject>

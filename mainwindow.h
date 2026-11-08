@@ -2,7 +2,7 @@
 #include <QMainWindow>
 #include <QJsonArray>
 #include <QList>
-#include "testing/stationendpoint.h"
+#include "stationendpoint.h"
 
 class WorkbenchController;
 class StationModel;

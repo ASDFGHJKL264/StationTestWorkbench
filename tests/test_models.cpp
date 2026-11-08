@@ -6,7 +6,7 @@
 #include <QPainter>
 #include <QStandardItemModel>
 #include <QTableView>
-#include "workbench/ui/models.h"
+#include "models.h"
 
 class ModelTests : public QObject
 {

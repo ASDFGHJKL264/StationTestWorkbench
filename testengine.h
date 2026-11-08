@@ -1,6 +1,6 @@
 #pragma once
-#include "testing/stationendpoint.h"
-#include "shared/protocol/framecodec.h"
+#include "stationendpoint.h"
+#include "framecodec.h"
 #include <QObject>
 #include <QJsonArray>
 #include <QJsonObject>

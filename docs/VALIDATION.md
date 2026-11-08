@@ -141,3 +141,15 @@ GUI响应探针使用10 ms QTimer，在真实SQLite `BEGIN IMMEDIATE`写锁导�
 D盘更新为 `D:\StationTestWorkbench-0.1.0-win64` 和 `D:\StationSimulator-0.1.0-win64` 两个安装目录及对应ZIP。桌面“多工位功能测试与追溯”和“多工位设备模拟器”分别指向两套程序，继续传入原数据目录和演示参数；更新前后6个原数据库、日志及状态文件哈希一致。旧安装文件及快捷方式备份保存在本机 `build/desktop-deployment-backup-*`，不进入源码仓库或安装包。
 
 提交前检查源码中的私钥、GitHub令牌、云访问密钥和敏感文件名，未发现匹配项。构建、运行数据、本地IDE配置、密钥文件和便携ZIP通过忽略规则及明确的提交范围排除；Git认证只使用系统凭据管理器，凭据不写入源码、URL或安装包。本轮未重新测量历史查询性能，也未改写已有Git历史。
+
+## 沿用温湿度项目目录风格（2026-11-08）
+
+工作台的19个源码文件平铺到项目根目录，11个测试及基准文件平铺到 `tests/`，构建配置统一到根 `CMakeLists.txt`。与 `Qwenshiducaiji` 的 `SensorRuntime` / `SensorWidgets` 对应，工作台使用 `WorkbenchRuntime` / `WorkbenchWidgets` 两个库。逐一对照迁移前版本，30个文件除头文件引用路径外内容一致；异常SN导出、线程归属和模拟器独立项目边界保持原有行为。
+
+全新 `build/flat-standalone/` 配置中故意指定不存在的模拟器目录，完成全部构建并通过7/7组独立测试，共73项QtTest检查，耗时25.01秒。随后 `verify.ps1 -WithSimulator -BatchRuns 100` 在 `build/quality/` 通过10/10组工作台及跨项目测试，共86项QtTest检查，0失败、0跳过，耗时38.62秒。两轮均覆盖100次连续归档及异常SN导出；结果在各构建目录的 `*-results.txt` 和 `test-results.xml`。模拟器源码本轮未修改。
+
+Qt Creator 当前套件构建目录重新编译主程序成功；Release在 `BUILD_TESTING=OFF` 下构建并重新生成便携包。源码便携目录和D盘安装目录均以Windows图形平台、隔离PATH和临时数据实测启动，程序退出码0，SQLite与文件日志初始化成功，不依赖Qt开发目录或模拟器进程。
+
+已更新 `D:\StationTestWorkbench-0.1.0-win64`、对应ZIP及桌面主程序入口，并重新校验和保存独立模拟器桌面入口。原数据目录与启动参数保留，更新前后6个数据库、日志和工位状态文件哈希一致。覆盖前的程序、文档、压缩包及快捷方式备份位于本机 `build/flat-layout-deployment-backup-*`，验证记录在 `build/flat-layout/`。
+
+提交检查覆盖平铺后的全部源码、文档及Git暂存对象，扫描私钥、GitHub令牌和常见云访问密钥；未发现匹配项。运行数据、密钥、IDE本地配置、构建产物及安装包继续通过忽略规则排除；便携ZIP另检查敏感文件和运行数据路径。GitHub认证沿用系统凭据管理器，不写入代码或安装包。本轮未新增业务逻辑或重跑历史查询性能基准。

@@ -1,7 +1,7 @@
 #include <QtTest>
 #include <QJsonDocument>
 #include <QtEndian>
-#include "shared/protocol/framecodec.h"
+#include "framecodec.h"
 
 namespace
 {
