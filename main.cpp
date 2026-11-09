@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "stationendpoint.h"
+#include "toolstyle.h"
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QStandardPaths>
@@ -10,6 +11,7 @@
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    ToolStyle::configureApplication(app);
     QCoreApplication::setOrganizationName("QtPortfolio");
     QCoreApplication::setApplicationName("StationTestWorkbench");
     app.setFont(QFont("Microsoft YaHei UI", 10));

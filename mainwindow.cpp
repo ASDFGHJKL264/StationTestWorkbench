@@ -195,6 +195,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::buildUi()
 {
+    // Resolve all roles locally so a later system palette change cannot recolor text alone.
+    setPalette(ToolStyle::lightPalette());
     setStyleSheet(ToolStyle::stylesheet());
     auto *central = new QWidget(this);
     setCentralWidget(central);

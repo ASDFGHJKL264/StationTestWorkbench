@@ -30,6 +30,8 @@ History rows keys `id,runId,stationId,sn,recipeVersion,execution,verdict,started
 
 ## GUI module
 
+The client uses Fusion controls and a complete light palette at application startup. Each window also applies a light palette and explicit foreground/background, selection and disabled colors in its stylesheet, including scrollable panels, tabs and splitters. System dark mode and later application palette changes must preserve readable normal, inactive, selected, placeholder and disabled text. The independent simulator maintains the same presentation policy in its own source tree.
+
 `mainwindow.h/.cpp` constructor `MainWindow(const QString &dataDirectory, const QList<StationEndpoint> &endpoints, QWidget *parent=nullptr)`; owns WorkbenchController and shuts down before destruction. `models.h/.cpp` typed Qt models use QAbstractTableModel/QSortFilterProxyModel/delegates, never SQL in GUI. WorkbenchController public interface is declared in `workbenchcontroller.h`; the operator entry point is `main.cpp`. Client style is in `toolstyle.h`; the independent simulator maintains its own frontend.
 
 UI: station execution board, product SN and recipe selection, start/cancel, step/result matrix, trace history by SN plus next cursor, per-run historical details, publish new recipe version by JSON file with validation, log. Clearly show execution/verdict/stored separately; simulation indication, no optimistic completed on click. Display one station selection shared by command and details. No GUI-side blocking files for log/history; file recipe input small bounded configs only. Signals carry QJson values.
