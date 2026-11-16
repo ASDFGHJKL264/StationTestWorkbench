@@ -422,19 +422,42 @@ QJsonArray Repository::loadSteps(const QString &runId, QString *error)
     return rows;
 }
 
-void Repository::queryHistory(const QString &filter, int beforeId)
+void Repository::queryHistory(const QString &snFilter, int beforeId)
+{
+    HistoryFilter filter;
+    filter.sn = snFilter;
+    queryFilteredHistory(filter, beforeId);
+}
+
+void Repository::queryFilteredHistory(const HistoryFilter &filter, int beforeId, quint64 requestId)
 {
     if (!checkThread())
         return;
+    const auto fail = [this, requestId](const QString &error)
+    {
+        emit operationError(error);
+        emit historyQueryFailed(requestId, error);
+    };
     QString error;
     if (!ready(&error))
     {
-        emit operationError(error);
+        fail(error);
         return;
     }
-    if (filter.size() > 64 || beforeId < 0)
+    const auto startUtc = filter.startDate.isValid() ? filter.startDate.startOfDay().toUTC()
+                                                   : QDateTime{};
+    // Advance the local calendar date before converting: a local day need not be 24 hours.
+    const auto endUtc = filter.endDate.isValid() ? filter.endDate.addDays(1).startOfDay().toUTC()
+                                               : QDateTime{};
+    if (filter.sn.size() > 64 || beforeId < 0 || filter.stationId < 0 || filter.stationId > 4 ||
+        (!filter.verdict.isEmpty() && filter.verdict != "PASS" && filter.verdict != "FAIL" &&
+         filter.verdict != "UNKNOWN") ||
+        (filter.startDate.isValid() && !startUtc.isValid()) ||
+        (filter.endDate.isValid() && !endUtc.isValid()) ||
+        (filter.startDate.isValid() && filter.endDate.isValid() &&
+         filter.startDate > filter.endDate))
     {
-        emit operationError(QStringLiteral("历史查询参数无效"));
+        fail(QStringLiteral("历史查询参数无效"));
         return;
     }
     QSqlQuery q(m_db);
@@ -443,19 +466,35 @@ void Repository::queryHistory(const QString &filter, int beforeId)
     QString sql = "SELECT "
                   "id,run_id,station_id,sn,recipe_version,execution,verdict,started_at,finished_at,"
                   "reason,recovery_pending FROM runs WHERE 1=1";
-    if (!filter.isEmpty())
+    if (!filter.sn.isEmpty())
         sql += " AND sn=?";
+    if (filter.stationId > 0)
+        sql += " AND station_id=?";
+    if (!filter.verdict.isEmpty())
+        sql += " AND verdict=?";
+    if (startUtc.isValid())
+        sql += " AND started_at>=?";
+    if (endUtc.isValid())
+        sql += " AND started_at<?";
     if (beforeId > 0)
         sql += " AND id<?";
     sql += " ORDER BY id DESC LIMIT 101";
     q.prepare(sql);
-    if (!filter.isEmpty())
-        q.addBindValue(filter);
+    if (!filter.sn.isEmpty())
+        q.addBindValue(filter.sn);
+    if (filter.stationId > 0)
+        q.addBindValue(filter.stationId);
+    if (!filter.verdict.isEmpty())
+        q.addBindValue(filter.verdict);
+    if (startUtc.isValid())
+        q.addBindValue(startUtc.toString(Qt::ISODateWithMs));
+    if (endUtc.isValid())
+        q.addBindValue(endUtc.toString(Qt::ISODateWithMs));
     if (beforeId > 0)
         q.addBindValue(beforeId);
     if (!exec(q, &error))
     {
-        emit operationError(error);
+        fail(error);
         return;
     }
     QJsonArray rows;
@@ -481,7 +520,7 @@ void Repository::queryHistory(const QString &filter, int beforeId)
     }
     if (q.lastError().isValid())
     {
-        emit operationError(q.lastError().text());
+        fail(q.lastError().text());
         return;
     }
     q.finish();
@@ -493,10 +532,11 @@ void Repository::queryHistory(const QString &filter, int beforeId)
     }
     if (!error.isEmpty())
     {
-        emit operationError(error);
+        fail(error);
         return;
     }
     emit historyReady(rows, more);
+    emit historyQueryReady(requestId, rows, more);
 }
 
 void Repository::exportFailedSns(const QString &path)

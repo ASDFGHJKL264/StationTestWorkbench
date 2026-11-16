@@ -25,6 +25,8 @@ class TestEngine final : public QObject
     void interruptionRecorded(const QString &runId, bool ok, const QString &error);
     void cancel(int stationId);
     void shutdown();
+  public slots:
+    void retryReconciliation(int stationId);
   signals:
     void stationUpdated(const QJsonObject &view);
     void logMessage(const QString &message, bool warning);
@@ -44,11 +46,13 @@ class TestEngine final : public QObject
         QString interruptionReason;
         qint64 interruptionRetryAt = 0;
         qint64 reconnectAt = 0, connectStarted = 0, lastRx = 0, lastPing = 0, startDeadline = 0,
-               queryDeadline = 0, ackDeadline = 0;
+               queryDeadline = 0, queryRetryAt = 0, cancelDeadline = 0, ackDeadline = 0;
+        qint64 lastQueryAt = -1000;
         quint32 sequence = 0, startSequence = 0;
-        int backoff = 1000;
+        int backoff = 1000, queryBackoff = 1000;
         bool online = false, dispatched = false, awaitingAck = false, cancelling = false,
-             interrupting = false, interruptionWriting = false, remoteUnknown = false;
+             interrupting = false, interruptionWriting = false, remoteUnknown = false,
+             reconciling = false;
     };
     struct PendingResult
     {
@@ -66,6 +70,9 @@ class TestEngine final : public QObject
     void read(Link &link);
     void receive(Link &link, const QJsonObject &message);
     void terminal(Link &link, const QJsonObject &result);
+    QString reconciliationRunId(const Link &link) const;
+    bool canReconcile(const Link &link) const;
+    void resetReconciliation(Link &link);
     void query(Link &link, const QString &runId);
     void publish(Link &link, const QString &execution = {}, const QString &detail = {});
     void clearUnknown(Link &link, const QString &reason);

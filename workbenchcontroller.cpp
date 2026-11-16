@@ -53,7 +53,18 @@ void WorkbenchController::initialize(const QString &dataDirectory,
             [this](const QJsonArray &runs) { m_recovery = runs; });
     connect(m_repository, &Repository::operationError, this,
             [this](const QString &message) { log(message, true); });
-    connect(m_repository, &Repository::historyReady, this, &WorkbenchController::historyReady);
+    connect(m_repository, &Repository::historyQueryReady, this,
+            [this](quint64 requestId, const QJsonArray &rows, bool more)
+            {
+                if (requestId == m_historyRequestId)
+                    emit historyReady(rows, more);
+            });
+    connect(m_repository, &Repository::historyQueryFailed, this,
+            [this](quint64 requestId, const QString &error)
+            {
+                if (requestId == m_historyRequestId)
+                    emit historyFailed(error);
+            });
     connect(m_repository, &Repository::reportReady, this,
             [this](const QString &path, bool ok, const QString &error)
             {
@@ -99,7 +110,7 @@ void WorkbenchController::initialize(const QString &dataDirectory,
             [this](const QJsonObject &, bool ok, bool duplicate, const QString &)
             {
                 if (ok && !duplicate && !m_stopping && m_historyCursor == 0)
-                    refreshHistory(m_historyFilter);
+                    refreshFilteredHistory(m_historyFilter);
             });
     m_engineThread.start();
     m_databaseThread.start();
@@ -156,14 +167,27 @@ void WorkbenchController::cancelTest(int id)
     if (m_ready && !m_stopping)
         QMetaObject::invokeMethod(m_engine, [e = m_engine, id] { e->cancel(id); });
 }
-void WorkbenchController::refreshHistory(const QString &filter, int beforeId)
+void WorkbenchController::retryReconciliation(int stationId)
+{
+    if (m_ready && !m_stopping)
+        QMetaObject::invokeMethod(m_engine, [engine = m_engine, stationId]
+                                  { engine->retryReconciliation(stationId); });
+}
+void WorkbenchController::refreshHistory(const QString &snFilter, int beforeId)
+{
+    HistoryFilter filter;
+    filter.sn = snFilter;
+    refreshFilteredHistory(filter, beforeId);
+}
+void WorkbenchController::refreshFilteredHistory(const HistoryFilter &filter, int beforeId)
 {
     if (!m_ready || m_stopping)
         return;
     m_historyFilter = filter;
     m_historyCursor = qMax(0, beforeId);
-    QMetaObject::invokeMethod(m_repository, [r = m_repository, filter, beforeId]
-                              { r->queryHistory(filter, beforeId); });
+    const auto requestId = ++m_historyRequestId;
+    QMetaObject::invokeMethod(m_repository, [r = m_repository, filter, beforeId, requestId]
+                              { r->queryFilteredHistory(filter, beforeId, requestId); });
 }
 void WorkbenchController::requestRecipes()
 {

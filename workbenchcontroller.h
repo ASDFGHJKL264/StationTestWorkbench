@@ -1,5 +1,6 @@
 #pragma once
 #include "stationendpoint.h"
+#include "repository.h"
 #include <QObject>
 #include <QThread>
 #include <QJsonObject>
@@ -21,7 +22,9 @@ class WorkbenchController final : public QObject
   public slots:
     void startTest(int stationId, const QString &sn, const QString &recipeVersion);
     void cancelTest(int stationId);
+    void retryReconciliation(int stationId);
     void refreshHistory(const QString &snFilter = {}, int beforeId = 0);
+    void refreshFilteredHistory(const HistoryFilter &filter, int beforeId = 0);
     void publishRecipe(const QJsonObject &recipe);
     void previewRecipe(int stationId, const QString &recipeVersion);
     void requestRecipes();
@@ -30,6 +33,7 @@ class WorkbenchController final : public QObject
   signals:
     void stationUpdated(const QJsonObject &station);
     void historyReady(const QJsonArray &rows, bool more);
+    void historyFailed(const QString &error);
     void recipesReady(const QJsonArray &recipes);
     void logMessage(const QString &message, bool warning = false);
     void ready(bool ok);
@@ -44,7 +48,8 @@ class WorkbenchController final : public QObject
     AsyncFileLogger *m_logger = nullptr;
     QJsonArray m_recipes;
     QJsonArray m_recovery;
-    QString m_historyFilter;
+    HistoryFilter m_historyFilter;
     int m_historyCursor = 0;
+    quint64 m_historyRequestId = 0;
     bool m_started = false, m_ready = false, m_stopping = false;
 };

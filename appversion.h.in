@@ -1,0 +1,8 @@
+#pragma once
+
+namespace AppVersion
+{
+inline constexpr char version[] = "@PROJECT_VERSION@";
+inline constexpr char revision[] = "@WORKBENCH_REVISION@";
+inline constexpr char builtAtUtc[] = "@WORKBENCH_BUILD_UTC@";
+}

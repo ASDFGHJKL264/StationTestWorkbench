@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QList>
 #include "stationendpoint.h"
+#include "repository.h"
 
 class WorkbenchController;
 class StationModel;
@@ -13,6 +14,8 @@ class QTableView;
 class QListView;
 class QLineEdit;
 class QComboBox;
+class QCheckBox;
+class QDateEdit;
 class QPushButton;
 class QLabel;
 class QSortFilterProxyModel;
@@ -36,6 +39,8 @@ class MainWindow final : public QMainWindow
     void showHistorySelection();
     void updateCommandAvailability();
     void queryHistory(bool older);
+    HistoryFilter historyFilter() const;
+    void historyFilterChanged();
     void importRecipe();
     void exportSelectedReport();
     void exportFailedSns();
@@ -50,11 +55,15 @@ class MainWindow final : public QMainWindow
     QListView *m_logView;
     QLineEdit *m_snInput, *m_historyFilter;
     QComboBox *m_recipe;
-    QPushButton *m_start, *m_cancel, *m_query, *m_older, *m_import, *m_export, *m_exportFailedSns;
+    QComboBox *m_historyStation, *m_historyVerdict;
+    QCheckBox *m_historyFromEnabled, *m_historyToEnabled;
+    QDateEdit *m_historyFromDate, *m_historyToDate;
+    QPushButton *m_start, *m_cancel, *m_reconcile, *m_query, *m_older, *m_import, *m_export,
+        *m_exportFailedSns;
     QLabel *m_stationTitle, *m_detail, *m_runIdentity, *m_connectionSummary, *m_historySummary,
         *m_historyDetail;
     QJsonArray m_recipes;
     bool m_backendReady = false, m_historyBusy = false, m_hasOlder = false, m_reportBusy = false;
     bool m_failedSnsBusy = false;
-    QString m_queryFilter;
+    HistoryFilter m_queryFilter;
 };

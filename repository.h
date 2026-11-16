@@ -3,6 +3,22 @@
 #include <QSqlDatabase>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QDate>
+
+// Invalid dates leave that bound open. Both dates refer to the local calendar day.
+struct HistoryFilter
+{
+    QString sn;
+    QDate startDate, endDate;
+    int stationId = 0;
+    QString verdict;
+
+    bool operator==(const HistoryFilter &other) const
+    {
+        return sn == other.sn && startDate == other.startDate && endDate == other.endDate &&
+               stationId == other.stationId && verdict == other.verdict;
+    }
+};
 
 // Every method runs on the database thread; no connection is shared with the GUI.
 class Repository final : public QObject
@@ -16,6 +32,7 @@ class Repository final : public QObject
     void reserveRun(const QJsonObject &request);
     void saveResult(const QJsonObject &result);
     void queryHistory(const QString &snFilter, int beforeId = 0);
+    void queryFilteredHistory(const HistoryFilter &filter, int beforeId = 0, quint64 requestId = 0);
     void exportReport(const QString &runId, const QString &path);
     void exportFailedSns(const QString &path);
     void listRecipes();
@@ -29,6 +46,8 @@ class Repository final : public QObject
     void runReserved(const QJsonObject &request, bool ok, const QString &error);
     void resultSaved(const QJsonObject &result, bool ok, bool duplicate, const QString &error);
     void historyReady(const QJsonArray &rows, bool more);
+    void historyQueryReady(quint64 requestId, const QJsonArray &rows, bool more);
+    void historyQueryFailed(quint64 requestId, const QString &error);
     void reportReady(const QString &path, bool ok, const QString &error);
     void failedSnsExported(const QString &path, bool ok, qint64 count, const QString &error);
     void recipesReady(const QJsonArray &recipes);

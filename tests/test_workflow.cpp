@@ -1,5 +1,7 @@
 #include "workbenchcontroller.h"
 #include "framecodec.h"
+#include "testengine.h"
+#include "domain.h"
 #include <QtTest>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -14,15 +16,21 @@ class Peer : public QTcpServer
   public:
     int station = 1, delayMs = 30, starts = 0, acks = 0, dropAcks = 0;
     bool automatic = true, acknowledged = false, reportUnknown = false;
+    int connections = 0, pings = 0, queries = 0, cancels = 0, dropQueries = 0;
+    bool dropAccepted = false, ignoreCancellation = false;
+    QElapsedTimer clock;
+    QList<qint64> queryTimes;
     QTcpSocket *socket = nullptr;
     QString session;
     Wire::Parser parser;
     QJsonObject run, result;
     explicit Peer(int id) : station(id)
     {
+        clock.start();
         connect(this, &QTcpServer::newConnection, this,
                 [this]
                 {
+                    ++connections;
                     socket = nextPendingConnection();
                     parser.reset();
                     connect(socket, &QTcpSocket::readyRead, this,
@@ -43,7 +51,7 @@ class Peer : public QTcpServer
             m["sequence"] = 1;
         socket->write(Wire::encode(m));
     }
-    void finish(const QString &outcome = "completed")
+    void finish(const QString &outcome = "completed", bool transmit = true)
     {
         QJsonArray values;
         if (outcome == "completed")
@@ -55,7 +63,8 @@ class Peer : public QTcpServer
         result = {{"runId", run["runId"]}, {"stationId", station},
                   {"sn", run["sn"]},       {"recipeVersion", run["recipeVersion"]},
                   {"outcome", outcome},    {"steps", values}};
-        send("terminal", {{"result", result}});
+        if (transmit)
+            send("terminal", {{"result", result}});
     }
     void handle(const QJsonObject &m)
     {
@@ -71,20 +80,28 @@ class Peer : public QTcpServer
         else if (m["session"].toString() != session)
             return;
         else if (kind == "ping")
+        {
+            ++pings;
             send("pong", {{"sequence", m["sequence"]}});
+        }
         else if (kind == "start")
         {
             run = m["run"].toObject();
             result = {};
             acknowledged = false;
             ++starts;
-            send("accepted",
-                 {{"sequence", m["sequence"]}, {"runId", run["runId"]}, {"accepted", true}});
+            if (!dropAccepted)
+                send("accepted",
+                     {{"sequence", m["sequence"]}, {"runId", run["runId"]}, {"accepted", true}});
             if (automatic)
                 QTimer::singleShot(delayMs, this, [this] { finish(); });
         }
         else if (kind == "query")
         {
+            ++queries;
+            queryTimes.append(clock.elapsed());
+            if (queries <= dropQueries)
+                return;
             const auto id = m["runId"];
             if (reportUnknown || id != run["runId"])
                 send("runState", {{"runId", id}, {"state", "unknown"}});
@@ -103,7 +120,11 @@ class Peer : public QTcpServer
             }
         }
         else if (kind == "cancel")
-            finish("cancelled");
+        {
+            ++cancels;
+            if (!ignoreCancellation)
+                finish("cancelled");
+        }
     }
 };
 
@@ -234,6 +255,141 @@ class WorkflowTests : public QObject
         QCOMPARE(view["verdict"].toString(), QString("PASS"));
         c.shutdown();
     }
+    void missingQueryRepliesRetryWithBackoffWhileHeartbeatRemainsHealthy()
+    {
+        QTemporaryDir dir;
+        Peer peer(1);
+        peer.automatic = false;
+        peer.dropAccepted = true;
+        peer.dropQueries = 2;
+        QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
+        QJsonObject view;
+        WorkbenchController c;
+        connect(&c, &WorkbenchController::stationUpdated, this,
+                [&](const QJsonObject &v) { view = v; });
+        c.initialize(dir.path(), {{1, "127.0.0.1", peer.serverPort()}});
+        QTRY_VERIFY(view["canStart"].toBool());
+        c.startTest(1, "QUERY-RETRY", "demo-5v-v1");
+        QTRY_COMPARE(peer.starts, 1);
+        QTRY_COMPARE_WITH_TIMEOUT(peer.queries, 2, 12000);
+        QVERIFY(view["online"].toBool());
+        QVERIFY(!view["canStart"].toBool());
+        QVERIFY(!view["stored"].toBool());
+        QCOMPARE(view["verdict"].toString(), QString("PENDING"));
+        QCOMPARE(peer.acks, 0);
+        QCOMPARE(peer.starts, 1);
+        QCOMPARE(peer.connections, 1);
+        QVERIFY(peer.pings >= 5);
+        // The terminal is available only through the next read-only query.
+        peer.finish("completed", false);
+        QTRY_VERIFY_WITH_TIMEOUT(view["stored"].toBool() && view["canStart"].toBool(), 10000);
+        QCOMPARE(peer.queries, 3);
+        QVERIFY(peer.queryTimes[1] - peer.queryTimes[0] >= 3900);
+        QVERIFY(peer.queryTimes[2] - peer.queryTimes[1] >= 4900);
+        QCOMPARE(peer.starts, 1);
+        QCOMPARE(peer.connections, 1);
+        QCOMPARE(view["verdict"].toString(), QString("PASS"));
+        QVERIFY(!view["canReconcile"].toBool());
+        c.shutdown();
+    }
+
+    void missingCancellationTerminalIsQueriedWithoutRepeatingActions()
+    {
+        QTemporaryDir dir;
+        Peer peer(1);
+        peer.automatic = false;
+        peer.ignoreCancellation = true;
+        QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
+        QJsonObject view;
+        WorkbenchController c;
+        connect(&c, &WorkbenchController::stationUpdated, this,
+                [&](const QJsonObject &v) { view = v; });
+        c.initialize(dir.path(), {{1, "127.0.0.1", peer.serverPort()}});
+        QTRY_VERIFY(view["canStart"].toBool());
+        c.startTest(1, "CANCEL-RECONCILE", "demo-5v-v1");
+        QTRY_COMPARE(view["execution"].toString(), QStringLiteral("执行中"));
+        c.cancelTest(1);
+        QTRY_COMPARE(peer.cancels, 1);
+        QTRY_VERIFY_WITH_TIMEOUT(peer.queries >= 2, 10000);
+        QTRY_COMPARE(view["execution"].toString(), QStringLiteral("取消处理中"));
+        QVERIFY(view["online"].toBool());
+        QVERIFY(!view["canStart"].toBool());
+        QVERIFY(!view["canCancel"].toBool());
+        QVERIFY(!view["stored"].toBool());
+        QCOMPARE(peer.acks, 0);
+        QCOMPARE(peer.cancels, 1);
+        QCOMPARE(peer.starts, 1);
+        QVERIFY(peer.pings >= 4);
+        peer.finish("cancelled", false);
+        QTRY_VERIFY_WITH_TIMEOUT(view["stored"].toBool() && view["canStart"].toBool(), 6000);
+        QCOMPARE(view["verdict"].toString(), QString("CANCELLED"));
+        QCOMPARE(peer.cancels, 1);
+        QCOMPARE(peer.starts, 1);
+        QCOMPARE(peer.connections, 1);
+        QVERIFY(!view["canReconcile"].toBool());
+        c.shutdown();
+    }
+
+    void manualReconciliationRejectsIdleAndThrottlesPendingRunQueries()
+    {
+        Peer peer(1);
+        peer.automatic = false;
+        peer.ignoreCancellation = true;
+        QVERIFY(peer.listen(QHostAddress::LocalHost, 0));
+        TestEngine engine;
+        QJsonObject view;
+        connect(&engine, &TestEngine::stationUpdated, this,
+                [&](const QJsonObject &v) { view = v; });
+        connect(&engine, &TestEngine::reserveRequested, &engine,
+                [&](const QJsonObject &run) { engine.reserved(run, true, {}); });
+        QSignalSpy saveRequested(&engine, &TestEngine::saveRequested);
+        engine.initialize({{1, "127.0.0.1", peer.serverPort()}});
+        QTRY_VERIFY(view["canStart"].toBool());
+        QVERIFY(!view["canReconcile"].toBool());
+        engine.retryReconciliation(0);
+        engine.retryReconciliation(1);
+        engine.retryReconciliation(2);
+        QTest::qWait(100);
+        QCOMPARE(peer.queries, 0);
+        const auto recipe = Domain::defaultRecipe();
+        engine.requestStart({{"runId", "manual-reconciliation"},
+                             {"stationId", 1},
+                             {"sn", "MANUAL-QUERY"},
+                             {"recipeVersion", recipe["version"]},
+                             {"recipe", recipe}});
+        QTRY_COMPARE(view["execution"].toString(), QStringLiteral("执行中"));
+        engine.retryReconciliation(1);
+        QTest::qWait(100);
+        QCOMPARE(peer.queries, 0);
+        engine.cancel(1);
+        QVERIFY(view["canReconcile"].toBool());
+        engine.retryReconciliation(1);
+        QTRY_COMPARE(peer.queries, 1);
+        QTRY_COMPARE(view["execution"].toString(), QStringLiteral("取消处理中"));
+        QVERIFY(!view["canReconcile"].toBool());
+        for (int i = 0; i < 20; ++i)
+            engine.retryReconciliation(1);
+        QTest::qWait(200);
+        QCOMPARE(peer.queries, 1);
+        QTRY_VERIFY_WITH_TIMEOUT(view["canReconcile"].toBool(), 2000);
+        peer.finish("cancelled", false);
+        engine.retryReconciliation(1);
+        QTRY_COMPARE(peer.queries, 2);
+        QTRY_COMPARE(saveRequested.size(), 1);
+        QVERIFY(peer.queryTimes[1] - peer.queryTimes[0] >= 1000);
+        QVERIFY(!view["canStart"].toBool());
+        QVERIFY(!view["canReconcile"].toBool());
+        QVERIFY(!view["stored"].toBool());
+        // Receiving a terminal still cannot unlock the station before storage commits.
+        engine.retryReconciliation(1);
+        QTest::qWait(100);
+        QCOMPARE(peer.queries, 2);
+        QCOMPARE(peer.acks, 0);
+        QCOMPARE(peer.starts, 1);
+        QCOMPARE(peer.cancels, 1);
+        engine.shutdown();
+    }
+
     void wrongRunCannotCompleteAndCancelNeedsTerminal()
     {
         QTemporaryDir dir;

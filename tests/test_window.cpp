@@ -15,6 +15,8 @@
 #include <QFileDialog>
 #include <QTimer>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QDateEdit>
 #include <QLabel>
 #include <QTabBar>
 #include <QPlainTextEdit>
@@ -115,11 +117,17 @@ class WindowTests final : public QObject
         auto *recipe = window.findChild<QComboBox *>("recipeCombo");
         auto *start = window.findChild<QPushButton *>("startButton");
         auto *query = window.findChild<QPushButton *>("queryHistoryButton");
+        auto *from = window.findChild<QDateEdit *>("historyFromDate");
+        auto *through = window.findChild<QDateEdit *>("historyToDate");
+        auto *stationFilter = window.findChild<QComboBox *>("historyStationFilter");
+        auto *verdictFilter = window.findChild<QComboBox *>("historyVerdictFilter");
+        auto *reconcile = window.findChild<QPushButton *>("reconcileButton");
         auto *stations = window.findChild<QTableView *>("stationView");
         auto *steps = window.findChild<QTableView *>("stepView");
         auto *history = window.findChild<QTableView *>("historyView");
         auto *tabs = window.findChild<QTabBar *>();
-        QVERIFY(sn && filter && recipe && start && query && stations && steps && history && tabs);
+        QVERIFY(sn && filter && recipe && start && query && from && through && stationFilter &&
+                verdictFilter && reconcile && stations && steps && history && tabs);
         QTRY_VERIFY(query->isEnabled());
         for (int phase = 0; phase < 2; ++phase)
         {
@@ -133,7 +141,8 @@ class WindowTests final : public QObject
                 QVERIFY(window.grab().save(QDir(evidence).filePath(
                     QString("workbench-%1-%2.png").arg(QTest::currentDataTag()).arg(phase))));
             }
-            for (auto *widget : QList<QWidget *>{&window, sn, filter, recipe, start, query,
+            for (auto *widget : QList<QWidget *>{&window, sn, filter, recipe, start, query, from,
+                                                 through, stationFilter, verdictFilter, reconcile,
                                                  stations, steps, history, tabs})
             {
                 const auto palette = widget->palette();
@@ -155,6 +164,171 @@ class WindowTests final : public QObject
                 }
             }
         }
+        window.close();
+    }
+    void historyFiltersResetPaginationAndKeepDatesOptional()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        const auto clientDirectory = directory.filePath("client");
+        {
+            Repository repository;
+            repository.initialize(clientDirectory + "/data/workbench.db");
+            QSignalSpy reserved(&repository, &Repository::runReserved),
+                saved(&repository, &Repository::resultSaved);
+            const auto recipe = Domain::defaultRecipe();
+            for (int i = 0; i < 103; ++i)
+            {
+                QJsonObject run{{"runId", QString("run-%1").arg(i)},
+                                {"stationId", 2},
+                                {"sn", QString("SN-%1").arg(i)},
+                                {"recipeVersion", recipe["version"]},
+                                {"recipe", recipe}};
+                repository.reserveRun(run);
+                QVERIFY(reserved.last()[1].toBool());
+                QJsonArray steps;
+                for (const auto &value : recipe["steps"].toArray())
+                {
+                    const auto rule = value.toObject();
+                    steps.append(QJsonObject{{"stepId", rule["id"]}, {"value", rule["nominal"]}});
+                }
+                auto result = run;
+                result["outcome"] = "completed";
+                result["steps"] = steps;
+                repository.saveResult(result);
+                QVERIFY(saved.last()[1].toBool());
+            }
+        }
+        MainWindow window(clientDirectory, {});
+        window.show();
+        auto *query = window.findChild<QPushButton *>("queryHistoryButton");
+        auto *older = window.findChild<QPushButton *>("olderHistoryButton");
+        auto *history = window.findChild<QTableView *>("historyView");
+        auto *sn = window.findChild<QLineEdit *>("historyFilter");
+        auto *station = window.findChild<QComboBox *>("historyStationFilter");
+        auto *verdict = window.findChild<QComboBox *>("historyVerdictFilter");
+        auto *fromEnabled = window.findChild<QCheckBox *>("historyFromEnabled");
+        auto *toEnabled = window.findChild<QCheckBox *>("historyToEnabled");
+        auto *from = window.findChild<QDateEdit *>("historyFromDate");
+        auto *through = window.findChild<QDateEdit *>("historyToDate");
+        QVERIFY(query && older && history && sn && station && verdict && fromEnabled && toEnabled &&
+                from && through);
+        QVERIFY(!fromEnabled->isChecked() && !toEnabled->isChecked());
+        QVERIFY(!from->isEnabled() && !through->isEnabled());
+        QTRY_COMPARE(history->model()->rowCount(), 100);
+        QTRY_VERIFY(older->isEnabled());
+        QTest::mouseClick(older, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 3);
+        QTRY_VERIFY(query->isEnabled());
+        station->setCurrentIndex(station->findData(2));
+        QVERIFY(!older->isEnabled());
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 100);
+        QTRY_VERIFY(older->isEnabled());
+        sn->setText("SN-7");
+        QVERIFY(!older->isEnabled());
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 1);
+        QCOMPARE(history->model()->index(0, 2).data().toString(), "SN-7");
+        verdict->setCurrentIndex(verdict->findData("FAIL"));
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 0);
+        QTRY_VERIFY(query->isEnabled());
+        verdict->setCurrentIndex(verdict->findData("PASS"));
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 1);
+        QTRY_VERIFY(query->isEnabled());
+
+        from->setDate(QDate::currentDate().addDays(1));
+        fromEnabled->setChecked(true);
+        QVERIFY(from->isEnabled());
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 0);
+        QTRY_VERIFY(query->isEnabled());
+        fromEnabled->setChecked(false);
+        through->setDate(QDate::currentDate().addDays(-1));
+        toEnabled->setChecked(true);
+        QVERIFY(through->isEnabled());
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_VERIFY(query->isEnabled());
+        QCOMPARE(history->model()->rowCount(), 0);
+        toEnabled->setChecked(false);
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 1);
+        QTRY_VERIFY(query->isEnabled());
+        QSignalSpy ready(window.controller(), &WorkbenchController::historyReady);
+        fromEnabled->setChecked(true);
+        toEnabled->setChecked(true);
+        QTest::mouseClick(query, Qt::LeftButton);
+        QCOMPARE(ready.size(), 0);
+        QVERIFY(query->isEnabled());
+        window.close();
+    }
+    void obsoleteHistoryRepliesAndWarningsDoNotChangeCurrentQuery()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        MainWindow window(directory.path(), {});
+        auto *query = window.findChild<QPushButton *>("queryHistoryButton");
+        auto *station = window.findChild<QComboBox *>("historyStationFilter");
+        auto *older = window.findChild<QPushButton *>("olderHistoryButton");
+        QVERIFY(query && station && older);
+        QSignalSpy history(window.controller(), &WorkbenchController::historyReady),
+            failed(window.controller(), &WorkbenchController::historyFailed);
+        QTRY_COMPARE(history.size(), 1);
+        history.clear();
+        HistoryFilter invalid;
+        invalid.stationId = 5;
+        window.controller()->refreshFilteredHistory({});
+        window.controller()->refreshFilteredHistory(invalid);
+        HistoryFilter current;
+        current.stationId = 2;
+        window.controller()->refreshFilteredHistory(current);
+        QTRY_COMPARE(history.size(), 1);
+        QCOMPARE(failed.size(), 0);
+
+        // A late response for unchanged backend conditions must not revive a stale page cursor
+        // after the user has edited the controls without submitting another query.
+        window.controller()->historyReady({QJsonObject{{"id", 150}}}, true);
+        QVERIFY(older->isEnabled());
+        station->setCurrentIndex(station->findData(3));
+        QVERIFY(!older->isEnabled());
+        window.controller()->historyReady({QJsonObject{{"id", 149}}}, true);
+        QVERIFY(!older->isEnabled());
+        QTest::mouseClick(query, Qt::LeftButton);
+        QVERIFY(!query->isEnabled());
+        window.controller()->logMessage("unrelated network warning", true);
+        QVERIFY(!query->isEnabled());
+        QTRY_VERIFY(query->isEnabled());
+        window.close();
+    }
+    void reconciliationButtonFollowsSelectedStationCapability()
+    {
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        MainWindow window(directory.path(), {{1, "127.0.0.1", 48592}, {2, "127.0.0.1", 48593}});
+        window.show();
+        auto *query = window.findChild<QPushButton *>("queryHistoryButton");
+        auto *reconcile = window.findChild<QPushButton *>("reconcileButton");
+        auto *start = window.findChild<QPushButton *>("startButton");
+        auto *stations = window.findChild<QTableView *>("stationView");
+        QVERIFY(query && reconcile && start && stations);
+        QVERIFY(!reconcile->isEnabled());
+        QTRY_VERIFY(query->isEnabled());
+        window.controller()->stationUpdated({{"stationId", 1}, {"canReconcile", true},
+                                              {"canStart", false}, {"runId", "held-run"}});
+        QVERIFY(reconcile->isEnabled());
+        QVERIFY(!start->isEnabled());
+        stations->selectRow(1);
+        QVERIFY(!reconcile->isEnabled());
+        stations->selectRow(0);
+        QVERIFY(reconcile->isEnabled());
+        QTest::mouseClick(reconcile, Qt::LeftButton);
+        QVERIFY(!reconcile->isEnabled());
+        QVERIFY(!start->isEnabled());
+        window.controller()->stationUpdated({{"stationId", 1}, {"canReconcile", false},
+                                              {"canStart", false}});
+        QVERIFY(!reconcile->isEnabled());
         window.close();
     }
     void failedSnExportButtonUsesWholeHistoryAndCanBeCancelled()
@@ -206,6 +380,18 @@ class WindowTests final : public QObject
         QTest::mouseClick(query, Qt::LeftButton);
         QTRY_COMPARE(history->model()->rowCount(), 1);
         QCOMPARE(history->model()->index(0, 2).data().toString(), "PASS-ONLY");
+        auto *station = window.findChild<QComboBox *>("historyStationFilter");
+        auto *verdict = window.findChild<QComboBox *>("historyVerdictFilter");
+        auto *fromEnabled = window.findChild<QCheckBox *>("historyFromEnabled");
+        auto *from = window.findChild<QDateEdit *>("historyFromDate");
+        QVERIFY(station && verdict && fromEnabled && from);
+        station->setCurrentIndex(station->findData(4));
+        verdict->setCurrentIndex(verdict->findData("UNKNOWN"));
+        from->setDate(QDate::currentDate().addDays(1));
+        fromEnabled->setChecked(true);
+        QTest::mouseClick(query, Qt::LeftButton);
+        QTRY_COMPARE(history->model()->rowCount(), 0);
+        QTRY_VERIFY(query->isEnabled());
         QSignalSpy exported(window.controller(), &WorkbenchController::failedSnsExported);
         const auto output = directory.filePath("failed-sns.csv");
         QTimer dialogTimeout;

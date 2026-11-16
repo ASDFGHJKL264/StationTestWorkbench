@@ -1,11 +1,30 @@
 cmake_minimum_required(VERSION 3.19)
-project(StationTestWorkbench VERSION 0.1.0 LANGUAGES CXX)
+project(StationTestWorkbench VERSION 0.2.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTORCC ON)
 include(CTest)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Sql Widgets)
 qt_standard_project_setup()
+
+find_package(Git QUIET)
+set(WORKBENCH_REVISION "unknown")
+if(GIT_FOUND)
+    execute_process(COMMAND "${GIT_EXECUTABLE}" rev-parse HEAD
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE WORKBENCH_REVISION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    if(NOT WORKBENCH_REVISION)
+        set(WORKBENCH_REVISION "unknown")
+    endif()
+    execute_process(COMMAND "${GIT_EXECUTABLE}" diff HEAD --quiet
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" RESULT_VARIABLE sourceChanges ERROR_QUIET)
+    if(NOT sourceChanges EQUAL 0)
+        string(APPEND WORKBENCH_REVISION "-modified")
+    endif()
+endif()
+string(TIMESTAMP WORKBENCH_BUILD_UTC "%Y-%m-%dT%H:%M:%SZ" UTC)
+configure_file(appversion.h.in generated/appversion.h @ONLY)
+configure_file(build-info.json.in build-info.json @ONLY)
 
 option(WORKBENCH_ENABLE_SIMULATOR_TESTS "Build optional integration tests with StationSimulator" OFF)
 set(STATION_SIMULATOR_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../StationSimulator"
@@ -32,6 +51,11 @@ qt_add_library(WorkbenchWidgets STATIC
 target_link_libraries(WorkbenchWidgets PUBLIC WorkbenchRuntime Qt6::Widgets)
 
 qt_add_executable(StationTestWorkbench WIN32 MACOSX_BUNDLE main.cpp)
+target_include_directories(StationTestWorkbench PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+if(WIN32)
+    configure_file(version.rc.in generated/version.rc @ONLY)
+    target_sources(StationTestWorkbench PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/version.rc")
+endif()
 target_link_libraries(StationTestWorkbench PRIVATE WorkbenchWidgets)
 
 install(TARGETS StationTestWorkbench BUNDLE DESTINATION . RUNTIME DESTINATION .)

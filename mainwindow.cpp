@@ -5,6 +5,8 @@
 #include "domain.h"
 #include <QAbstractItemView>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QDateEdit>
 #include <QFile>
 #include <QFileDialog>
 #include <QFrame>
@@ -122,11 +124,15 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
                 m_hasOlder = more;
                 m_history->setRows(rows);
                 m_query->setEnabled(m_backendReady);
-                m_older->setEnabled(m_backendReady && more && m_history->lastId() > 0);
+                const bool currentFilter = historyFilter() == m_queryFilter;
+                m_older->setEnabled(m_backendReady && currentFilter && more &&
+                                    m_history->lastId() > 0);
                 m_historySummary->setText(
                     QStringLiteral("本页 %1 条 · 每页最多 100 条 · %2")
                         .arg(rows.size())
                         .arg(more ? QStringLiteral("可查看更早记录") : QStringLiteral("已到末页")));
+                if (!currentFilter)
+                    historyFilterChanged();
                 m_historySteps->setSteps({});
                 m_historyDetail->setText(
                     QStringLiteral("选择一条记录查看绑定配方和各步骤实测值。"));
@@ -145,6 +151,15 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
                 m_logs->append(text, !ok);
                 statusBar()->showMessage(text, 15000);
             });
+    connect(m_controller, &WorkbenchController::historyFailed, this,
+            [this](const QString &error)
+            {
+                m_historyBusy = false;
+                m_query->setEnabled(m_backendReady);
+                m_older->setEnabled(m_backendReady && historyFilter() == m_queryFilter &&
+                                    m_hasOlder && m_history->lastId() > 0);
+                m_historySummary->setText(QStringLiteral("历史查询失败：") + error);
+            });
     connect(m_controller, &WorkbenchController::failedSnsExported, this,
             [this](const QString &, bool, qint64, const QString &)
             {
@@ -161,12 +176,6 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
                 if (atBottom)
                     m_logView->scrollToBottom();
                 statusBar()->showMessage(text, warning ? 12000 : 5000);
-                if (m_historyBusy && warning)
-                {
-                    m_historyBusy = false;
-                    m_query->setEnabled(m_backendReady);
-                    m_older->setEnabled(m_backendReady && m_hasOlder && m_history->lastId() > 0);
-                }
             });
     connect(m_controller, &WorkbenchController::ready, this,
             [this](bool ok)
@@ -197,7 +206,9 @@ void MainWindow::buildUi()
 {
     // Resolve all roles locally so a later system palette change cannot recolor text alone.
     setPalette(ToolStyle::lightPalette());
-    setStyleSheet(ToolStyle::stylesheet());
+    setStyleSheet(ToolStyle::stylesheet() +
+                  QStringLiteral("QDateEdit { min-height:23px; color:#222222; background:white; }"
+                                 "QDateEdit:disabled { color:#666666; background:#eeeeee; }"));
     auto *central = new QWidget(this);
     setCentralWidget(central);
     auto *root = new QVBoxLayout(central);
@@ -274,6 +285,11 @@ void MainWindow::buildUi()
     m_cancel->setObjectName("cancelButton");
     m_cancel->setEnabled(false);
     cmd->addWidget(m_cancel);
+    m_reconcile = new QPushButton(QStringLiteral("重新核对"), commands);
+    m_reconcile->setObjectName("reconcileButton");
+    m_reconcile->setToolTip(QStringLiteral("按原测试编号重新核对测试状态，不会开始新测试。"));
+    m_reconcile->setEnabled(false);
+    cmd->addWidget(m_reconcile);
     root->addWidget(commands);
     connect(m_snInput, &QLineEdit::textChanged, this, &MainWindow::updateCommandAvailability);
     connect(m_snInput, &QLineEdit::returnPressed, this,
@@ -305,6 +321,15 @@ void MainWindow::buildUi()
                     m_controller->cancelTest(selectedStationId());
             });
     connect(m_import, &QPushButton::clicked, this, &MainWindow::importRecipe);
+    connect(m_reconcile, &QPushButton::clicked, this,
+            [this]
+            {
+                if (m_reconcile->isEnabled())
+                {
+                    m_reconcile->setEnabled(false);
+                    m_controller->retryReconciliation(selectedStationId());
+                }
+            });
 
     auto *content = new QSplitter(Qt::Horizontal, central);
     content->setChildrenCollapsible(false);
@@ -356,6 +381,52 @@ void MainWindow::buildUi()
     m_older->setEnabled(false);
     filterLayout->addWidget(m_older);
     historyLayout->addLayout(filterLayout);
+    auto *conditions = new QHBoxLayout;
+    conditions->setSpacing(6);
+    m_historyFromEnabled = new QCheckBox(QStringLiteral("起日"), historyPage);
+    m_historyFromEnabled->setObjectName("historyFromEnabled");
+    conditions->addWidget(m_historyFromEnabled);
+    m_historyFromDate = new QDateEdit(QDate::currentDate(), historyPage);
+    m_historyFromDate->setObjectName("historyFromDate");
+    m_historyFromDate->setDisplayFormat("yyyy-MM-dd");
+    m_historyFromDate->setCalendarPopup(true);
+    m_historyFromDate->setEnabled(false);
+    m_historyFromDate->setToolTip(QStringLiteral("按测试开始时间筛选，包含所选本地日期。"));
+    conditions->addWidget(m_historyFromDate);
+    m_historyToEnabled = new QCheckBox(QStringLiteral("止日"), historyPage);
+    m_historyToEnabled->setObjectName("historyToEnabled");
+    conditions->addWidget(m_historyToEnabled);
+    m_historyToDate = new QDateEdit(QDate::currentDate(), historyPage);
+    m_historyToDate->setObjectName("historyToDate");
+    m_historyToDate->setDisplayFormat("yyyy-MM-dd");
+    m_historyToDate->setCalendarPopup(true);
+    m_historyToDate->setEnabled(false);
+    m_historyToDate->setToolTip(QStringLiteral("包含所选本地日期全天；不勾选时不限制结束日期。"));
+    conditions->addWidget(m_historyToDate);
+    m_historyStation = new QComboBox(historyPage);
+    m_historyStation->setObjectName("historyStationFilter");
+    m_historyStation->addItem(QStringLiteral("全部工位"), 0);
+    for (int station = 1; station <= 4; ++station)
+        m_historyStation->addItem(QStringLiteral("工位 %1").arg(station), station);
+    conditions->addWidget(m_historyStation);
+    m_historyVerdict = new QComboBox(historyPage);
+    m_historyVerdict->setObjectName("historyVerdictFilter");
+    m_historyVerdict->addItem(QStringLiteral("全部判定"), QString{});
+    for (const auto *verdict : {"PASS", "FAIL", "UNKNOWN"})
+        m_historyVerdict->addItem(QString::fromLatin1(verdict), QString::fromLatin1(verdict));
+    conditions->addWidget(m_historyVerdict);
+    historyLayout->addLayout(conditions);
+    connect(m_historyFromEnabled, &QCheckBox::toggled, m_historyFromDate, &QWidget::setEnabled);
+    connect(m_historyToEnabled, &QCheckBox::toggled, m_historyToDate, &QWidget::setEnabled);
+    connect(m_historyFromEnabled, &QCheckBox::toggled, this, &MainWindow::historyFilterChanged);
+    connect(m_historyToEnabled, &QCheckBox::toggled, this, &MainWindow::historyFilterChanged);
+    connect(m_historyFromDate, &QDateEdit::dateChanged, this, &MainWindow::historyFilterChanged);
+    connect(m_historyToDate, &QDateEdit::dateChanged, this, &MainWindow::historyFilterChanged);
+    connect(m_historyStation, &QComboBox::currentIndexChanged, this,
+            &MainWindow::historyFilterChanged);
+    connect(m_historyVerdict, &QComboBox::currentIndexChanged, this,
+            &MainWindow::historyFilterChanged);
+    connect(m_historyFilter, &QLineEdit::textChanged, this, &MainWindow::historyFilterChanged);
     auto *exportLayout = new QHBoxLayout;
     m_export = new QPushButton(QStringLiteral("导出本次报告"), historyPage);
     m_export->setObjectName("exportReportButton");
@@ -374,6 +445,7 @@ void MainWindow::buildUi()
     historyLayout->addLayout(exportLayout);
     m_historySummary = label(QStringLiteral("输入产品 SN 查询，留空查看全部。"));
     m_historySummary->setToolTip(QStringLiteral("历史查询由数据库工作线程执行，每页最多100条。"));
+    m_historySummary->setWordWrap(true);
     m_historySummary->setObjectName("hint");
     historyLayout->addWidget(m_historySummary);
     auto *historySplit = new QSplitter(Qt::Vertical, historyPage);
@@ -386,6 +458,7 @@ void MainWindow::buildUi()
     m_historyView->setColumnHidden(6, true);
     m_historyView->setItemDelegateForColumn(5, new QualityDelegate(m_historyView));
     m_historyView->setSortingEnabled(true);
+    m_historyView->horizontalHeader()->setToolTip(QStringLiteral("表头排序仅影响本页记录。"));
     m_historyView->sortByColumn(0, Qt::DescendingOrder);
     m_historyView->setColumnWidth(0, 160);
     m_historyView->setColumnWidth(1, 50);
@@ -505,6 +578,7 @@ void MainWindow::updateCommandAvailability()
                         !m_snInput->text().trimmed().isEmpty() &&
                         !m_recipe->currentData().toString().isEmpty());
     m_cancel->setEnabled(m_backendReady && row["canCancel"].toBool());
+    m_reconcile->setEnabled(m_backendReady && row["canReconcile"].toBool());
 }
 void MainWindow::showHistorySelection()
 {
@@ -532,18 +606,47 @@ void MainWindow::queryHistory(bool older)
     int cursor = 0;
     if (older)
     {
-        if (!m_hasOlder)
+        if (!m_hasOlder || !(historyFilter() == m_queryFilter))
             return;
         cursor = m_history->lastId();
         if (cursor <= 0)
             return;
     }
     else
-        m_queryFilter = m_historyFilter->text().trimmed();
+    {
+        const auto filter = historyFilter();
+        if (filter.startDate.isValid() && filter.endDate.isValid() &&
+            filter.startDate > filter.endDate)
+        {
+            m_historySummary->setText(QStringLiteral("起日不能晚于止日，请调整后重新查询。"));
+            return;
+        }
+        m_queryFilter = filter;
+    }
     m_historyBusy = true;
     m_query->setEnabled(false);
     m_older->setEnabled(false);
-    m_controller->refreshHistory(m_queryFilter, cursor);
+    m_controller->refreshFilteredHistory(m_queryFilter, cursor);
+}
+
+HistoryFilter MainWindow::historyFilter() const
+{
+    HistoryFilter filter;
+    filter.sn = m_historyFilter->text().trimmed();
+    filter.stationId = m_historyStation->currentData().toInt();
+    filter.verdict = m_historyVerdict->currentData().toString();
+    if (m_historyFromEnabled->isChecked())
+        filter.startDate = m_historyFromDate->date();
+    if (m_historyToEnabled->isChecked())
+        filter.endDate = m_historyToDate->date();
+    return filter;
+}
+
+void MainWindow::historyFilterChanged()
+{
+    m_hasOlder = false;
+    m_older->setEnabled(false);
+    m_historySummary->setText(QStringLiteral("筛选条件已更改，点击“查询 / 最新”从第一页查询。"));
 }
 void MainWindow::importRecipe()
 {

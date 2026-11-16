@@ -7,7 +7,13 @@
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
 $build=Join-Path $projectRoot 'build/release'
-$package=Join-Path $projectRoot 'dist/StationTestWorkbench-0.1.0-win64'
+$projectText=[IO.File]::ReadAllText((Join-Path $projectRoot 'CMakeLists.txt'))
+$versionMatch=[regex]::Match($projectText,'project\(StationTestWorkbench VERSION (\d+\.\d+\.\d+)')
+if(!$versionMatch.Success) {throw 'Cannot read the project version.'}
+$version=$versionMatch.Groups[1].Value
+$finalPackage=[IO.Path]::GetFullPath((Join-Path $projectRoot "dist/StationTestWorkbench-$version-win64"))
+$stagingRoot=[IO.Path]::GetFullPath((Join-Path $projectRoot ('build/package-stage-'+[Guid]::NewGuid().ToString('N'))))
+$package=Join-Path $stagingRoot "StationTestWorkbench-$version-win64"
 $oldPath=$env:PATH
 function Run-Checked([string]$Executable,[string[]]$Arguments) {
     & $Executable @Arguments
@@ -21,16 +27,20 @@ try {
     foreach($name in @('StationTestWorkbench.exe')) {
         $source=Join-Path $build $name
         $destination=Join-Path $package $name
-        # An unchanged running client does not need to be overwritten during simulator updates.
-        $identical=(Test-Path -LiteralPath $destination) -and ((Get-FileHash -LiteralPath $source).Hash -eq (Get-FileHash -LiteralPath $destination).Hash)
-        if(!$identical) {Copy-Item -LiteralPath $source -Destination $destination -Force}
+        Copy-Item -LiteralPath $source -Destination $destination
     }
     foreach($name in @('StationTestWorkbench.exe')) {
         Run-Checked (Join-Path $QtPrefix 'bin/windeployqt.exe') @('--release','--compiler-runtime','--no-translations','--no-system-d3d-compiler','--no-opengl-sw',(Join-Path $package $name))
     }
     Copy-Item -LiteralPath (Join-Path $projectRoot 'README.md') -Destination $package -Force
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $package -Recurse -Force
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'recipes') -Destination $package -Recurse -Force
+    # Copy only version-controlled documentation and recipes, excluding local drafts.
+    $tracked=@(& git -C $projectRoot -c core.quotepath=false ls-files -- docs recipes)
+    if($LASTEXITCODE -ne 0) {throw 'Cannot enumerate release documentation.'}
+    foreach($relative in $tracked) {
+        $destination=Join-Path $package $relative
+        [void][IO.Directory]::CreateDirectory((Split-Path $destination -Parent))
+        Copy-Item -LiteralPath (Join-Path $projectRoot $relative) -Destination $destination -Force
+    }
     foreach($name in @('启动主程序.cmd')) {
         Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $package -Force
     }
@@ -38,16 +48,27 @@ try {
     foreach($name in @('start-client.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $package 'scripts') -Force
     }
-    # Retire only known legacy bundle files; preserve runtime data and other package files.
-    $packageRoot=[IO.Path]::GetFullPath($package).TrimEnd('\')+'\'
-    foreach($relative in @('StationSimulator.exe','启动演示.cmd','scripts/start-demo.ps1')) {
-        $legacy=[IO.Path]::GetFullPath((Join-Path $package $relative))
-        if(!$legacy.StartsWith($packageRoot,[StringComparison]::OrdinalIgnoreCase)) {throw 'Invalid legacy package path.'}
-        if(Test-Path -LiteralPath $legacy -PathType Leaf) {Remove-Item -LiteralPath $legacy -Force}
-    }
-    # Keep local demonstration data on disk, but never put it into the distributable ZIP.
-    $runtimeDirectories=@('demo-data','simulator-data','standalone-simulator-data')
-    $releaseFiles=@(Get-ChildItem -LiteralPath $package -Force | Where-Object {$_.Name -notin $runtimeDirectories} | Select-Object -ExpandProperty FullName)
+    $manifest=Get-Content -LiteralPath (Join-Path $build 'build-info.json') -Raw | ConvertFrom-Json
+    if($manifest.version -cne $version) {throw 'Build and package versions differ.'}
+    $manifest | Add-Member -NotePropertyName executableSha256 -NotePropertyValue (Get-FileHash -LiteralPath (Join-Path $package 'StationTestWorkbench.exe') -Algorithm SHA256).Hash
+    $manifest | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $package 'release.json') -Encoding UTF8
+    # Package a fresh staging tree; old release files can never enter the new archive.
+    $releaseFiles=@(Get-ChildItem -LiteralPath $package -Force | Select-Object -ExpandProperty FullName)
     Compress-Archive -LiteralPath $releaseFiles -DestinationPath "$package.zip" -Force
-    Write-Output "Portable package: $package.zip"
+    $distRoot=[IO.Path]::GetFullPath((Join-Path $projectRoot 'dist')).TrimEnd('\')+'\'
+    $buildRoot=[IO.Path]::GetFullPath((Join-Path $projectRoot 'build')).TrimEnd('\')+'\'
+    $backupRoot=[IO.Path]::GetFullPath((Join-Path $projectRoot ('build/package-backup-'+[Guid]::NewGuid().ToString('N'))))
+    if(!$finalPackage.StartsWith($distRoot,[StringComparison]::OrdinalIgnoreCase) -or
+       !$package.StartsWith($buildRoot,[StringComparison]::OrdinalIgnoreCase) -or
+       !$backupRoot.StartsWith($buildRoot,[StringComparison]::OrdinalIgnoreCase)) {throw 'Invalid package publication paths.'}
+    if(@(Get-Process -Name StationTestWorkbench -ErrorAction SilentlyContinue | Where-Object {$_.Path -ieq (Join-Path $finalPackage 'StationTestWorkbench.exe')}).Count) {throw 'Close the previous source portable application before repackaging.'}
+    [void][IO.Directory]::CreateDirectory($distRoot)
+    [void][IO.Directory]::CreateDirectory($backupRoot)
+    # Preserve the entire old tree, including local data, in a non-distributable backup.
+    if(Test-Path -LiteralPath $finalPackage) {Move-Item -LiteralPath $finalPackage -Destination (Join-Path $backupRoot 'previous-package')}
+    if(Test-Path -LiteralPath ($finalPackage+'.zip')) {Move-Item -LiteralPath ($finalPackage+'.zip') -Destination (Join-Path $backupRoot 'previous-package.zip')}
+    Move-Item -LiteralPath $package -Destination $finalPackage
+    Move-Item -LiteralPath ($package+'.zip') -Destination ($finalPackage+'.zip')
+    Write-Output "Portable package: $finalPackage.zip"
+    Write-Output "Previous package backup: $backupRoot"
 } finally {$env:PATH=$oldPath}

@@ -1,0 +1,6 @@
+{
+    "application": "StationTestWorkbench",
+    "version": "@PROJECT_VERSION@",
+    "revision": "@WORKBENCH_REVISION@",
+    "builtAtUtc": "@WORKBENCH_BUILD_UTC@"
+}

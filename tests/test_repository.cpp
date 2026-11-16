@@ -92,6 +92,9 @@ class RepositoryTests final : public QObject
     void versionOneMigratesWithoutLosingHistory();
     void publishedRecipeVersionIsImmutable();
     void keysetHistoryIsBoundedAndStable();
+    void filteredHistoryUsesLocalDayBoundariesAndExactIdentity();
+    void filteredHistoryKeepsCursorAcrossNewResults();
+    void filteredHistoryRejectsInvalidConditions();
     void cancellationHasSeparateVerdict();
     void futureSchemaIsRejectedWithoutChanges();
     void connectionLivesOnWorkerThread();
@@ -497,6 +500,152 @@ void RepositoryTests::keysetHistoryIsBoundedAndStable()
     QCOMPARE(db.count("runs"), 206);
     QCOMPARE(db.count("results"), 206);
     QCOMPARE(db.count("steps"), 618);
+}
+
+void RepositoryTests::filteredHistoryUsesLocalDayBoundariesAndExactIdentity()
+{
+    QTemporaryDir dir;
+    const auto path = dir.filePath("filtered.db");
+    Repository repository;
+    repository.initialize(path);
+    ExternalConnection db(path);
+    QSignalSpy reserved(&repository, &Repository::runReserved),
+        saved(&repository, &Repository::resultSaved), history(&repository, &Repository::historyReady);
+    const QDate day(2026, 2, 14);
+    const auto midnight = day.startOfDay();
+    const auto nextMidnight = day.addDays(1).startOfDay();
+    const QString exactSn = "SN_%'001";
+    const auto add = [&](const QString &id, const QDateTime &time, int station,
+                         const QString &sn, const QString &verdict)
+    {
+        const auto run = request(id, station, sn);
+        repository.reserveRun(run);
+        QVERIFY(reserved.last()[1].toBool());
+        if (verdict == "UNKNOWN")
+            repository.markInterrupted(id, "station could not identify the run");
+        else
+        {
+            repository.saveResult(terminal(run, verdict == "FAIL"));
+            QVERIFY(saved.last()[1].toBool());
+        }
+        QSqlQuery update(db.db);
+        update.prepare("UPDATE runs SET started_at=? WHERE run_id=?");
+        update.addBindValue(time.toUTC().toString(Qt::ISODateWithMs));
+        update.addBindValue(id);
+        QVERIFY(update.exec());
+    };
+    add("before", midnight.addMSecs(-1), 2, exactSn, "FAIL");
+    add("start", midnight, 2, exactSn, "FAIL");
+    add("last-ms", nextMidnight.addMSecs(-1), 2, exactSn, "FAIL");
+    add("next-day", nextMidnight, 2, exactSn, "FAIL");
+    add("other-station", midnight, 3, exactSn, "FAIL");
+    add("other-sn", midnight, 2, exactSn + "-suffix", "FAIL");
+    add("pass", midnight, 2, exactSn, "PASS");
+    add("unknown", midnight, 2, exactSn, "UNKNOWN");
+
+    HistoryFilter filter;
+    filter.sn = exactSn;
+    filter.stationId = 2;
+    filter.verdict = "FAIL";
+    filter.startDate = filter.endDate = day;
+    repository.queryFilteredHistory(filter);
+    auto rows = qvariant_cast<QJsonArray>(history.last()[0]);
+    QCOMPARE(rows.size(), 2);
+    QCOMPARE(rows[0].toObject()["runId"].toString(), "last-ms");
+    QCOMPARE(rows[1].toObject()["runId"].toString(), "start");
+    QVERIFY(!history.last()[1].toBool());
+
+    filter.startDate = {};
+    repository.queryFilteredHistory(filter);
+    QCOMPARE(qvariant_cast<QJsonArray>(history.last()[0]).size(), 3);
+    filter.startDate = day;
+    filter.endDate = {};
+    repository.queryFilteredHistory(filter);
+    QCOMPARE(qvariant_cast<QJsonArray>(history.last()[0]).size(), 3);
+    filter.endDate = day;
+    filter.verdict = "UNKNOWN";
+    repository.queryFilteredHistory(filter);
+    rows = qvariant_cast<QJsonArray>(history.last()[0]);
+    QCOMPARE(rows.size(), 1);
+    QCOMPARE(rows[0].toObject()["runId"].toString(), "unknown");
+    filter.verdict = "PASS";
+    repository.queryFilteredHistory(filter);
+    rows = qvariant_cast<QJsonArray>(history.last()[0]);
+    QCOMPARE(rows.size(), 1);
+    QCOMPARE(rows[0].toObject()["runId"].toString(), "pass");
+    repository.queryFilteredHistory({});
+    QCOMPARE(qvariant_cast<QJsonArray>(history.last()[0]).size(), 8);
+    repository.queryHistory(exactSn);
+    QCOMPARE(qvariant_cast<QJsonArray>(history.last()[0]).size(), 7);
+}
+
+void RepositoryTests::filteredHistoryKeepsCursorAcrossNewResults()
+{
+    QTemporaryDir dir;
+    Repository repository;
+    repository.initialize(dir.filePath("filtered.db"));
+    QSignalSpy reserved(&repository, &Repository::runReserved),
+        saved(&repository, &Repository::resultSaved), history(&repository, &Repository::historyReady);
+    const auto add = [&](const QString &id, int station)
+    {
+        const auto run = request(id, station, "SAME-SN");
+        repository.reserveRun(run);
+        QVERIFY(reserved.last()[1].toBool());
+        repository.saveResult(terminal(run, true));
+        QVERIFY(saved.last()[1].toBool());
+    };
+    for (int i = 1; i <= 103; ++i)
+        add(QString("match-%1").arg(i), 2);
+    // More than one page of newer, nonmatching rows must not hide matching history.
+    for (int i = 0; i < 105; ++i)
+        add(QString("other-%1").arg(i), 3);
+    HistoryFilter filter;
+    filter.sn = "SAME-SN";
+    filter.stationId = 2;
+    filter.verdict = "FAIL";
+    repository.queryFilteredHistory(filter);
+    auto rows = qvariant_cast<QJsonArray>(history.last()[0]);
+    QCOMPARE(rows.size(), 100);
+    QCOMPARE(rows[0].toObject()["runId"].toString(), "match-103");
+    QVERIFY(history.last()[1].toBool());
+    const auto cursor = rows.last().toObject()["id"].toInt();
+    QCOMPARE(cursor, 4);
+    add("new-matching-result", 2);
+    repository.queryFilteredHistory(filter, cursor);
+    rows = qvariant_cast<QJsonArray>(history.last()[0]);
+    QCOMPARE(rows.size(), 3);
+    QVERIFY(!history.last()[1].toBool());
+    for (int i = 0; i < rows.size(); ++i)
+        QCOMPARE(rows[i].toObject()["runId"].toString(), QString("match-%1").arg(3 - i));
+}
+
+void RepositoryTests::filteredHistoryRejectsInvalidConditions()
+{
+    QTemporaryDir dir;
+    Repository repository;
+    repository.initialize(dir.filePath("filtered.db"));
+    QSignalSpy errors(&repository, &Repository::operationError),
+        history(&repository, &Repository::historyReady);
+    HistoryFilter filter;
+    filter.stationId = 5;
+    repository.queryFilteredHistory(filter);
+    filter.stationId = -1;
+    repository.queryFilteredHistory(filter);
+    filter.stationId = 0;
+    filter.verdict = "FAIL' OR 1=1 --";
+    repository.queryFilteredHistory(filter);
+    filter.verdict.clear();
+    filter.startDate = QDate(2026, 2, 15);
+    filter.endDate = QDate(2026, 2, 14);
+    repository.queryFilteredHistory(filter);
+    filter = {};
+    filter.sn = QString(65, 'A');
+    repository.queryFilteredHistory(filter);
+    repository.queryFilteredHistory({}, -1);
+    QCOMPARE(errors.size(), 6);
+    QCOMPARE(history.size(), 0);
+    repository.queryHistory({});
+    QCOMPARE(history.size(), 1);
 }
 
 void RepositoryTests::cancellationHasSeparateVerdict()

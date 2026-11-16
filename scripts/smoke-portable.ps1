@@ -4,7 +4,17 @@
 )
 $ErrorActionPreference='Stop'
 $projectRoot=Split-Path $PSScriptRoot -Parent
-if(!$ProgramDirectory) {$ProgramDirectory=Join-Path $projectRoot 'dist/StationTestWorkbench-0.1.0-win64'}
+if(!$ProgramDirectory) {
+    $projectText=[IO.File]::ReadAllText((Join-Path $projectRoot 'CMakeLists.txt'))
+    $versionMatch=[regex]::Match($projectText,'project\(StationTestWorkbench VERSION (\d+\.\d+\.\d+)')
+    if(!$versionMatch.Success) {throw 'Cannot read the project version.'}
+    $ProgramDirectory=Join-Path $projectRoot ('dist/StationTestWorkbench-'+$versionMatch.Groups[1].Value+'-win64')
+}
+$manifestPath=Join-Path $ProgramDirectory 'release.json'
+if(!(Test-Path -LiteralPath $manifestPath)) {throw 'Missing release manifest.'}
+$manifest=Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+$exe=Get-Item -LiteralPath (Join-Path $ProgramDirectory 'StationTestWorkbench.exe')
+if((Get-FileHash -LiteralPath $exe.FullName).Hash -cne $manifest.executableSha256 -or $exe.VersionInfo.ProductVersion -cne $manifest.version) {throw 'Release version or executable hash mismatch.'}
 $data=Join-Path $projectRoot ('build/portable-smoke-'+[Guid]::NewGuid().ToString('N'))
 [void][IO.Directory]::CreateDirectory($data)
 $owned=[Collections.Generic.List[Diagnostics.Process]]::new()
@@ -36,7 +46,7 @@ try {
     if(!(Test-Path -LiteralPath $database) -or !(Test-Path -LiteralPath $log)) {throw 'Packaged database/log initialization failed.'}
     $logText=[IO.File]::ReadAllText($log,[Text.Encoding]::UTF8)
     if(!$logText.Contains('数据库就绪')) {throw 'No successful Qt SQLite initialization evidence in packaged log.'}
-    $report=[ordered]@{clientExitCode=0;simulatorProcesses=0;databaseCreated=$true;sqliteReady=$true;qtOnPath=$false;package=$ProgramDirectory;evidenceDirectory=$data}
+    $report=[ordered]@{clientExitCode=0;simulatorProcesses=0;databaseCreated=$true;sqliteReady=$true;qtOnPath=$false;version=$manifest.version;revision=$manifest.revision;package=$ProgramDirectory;evidenceDirectory=$data}
     $report | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $projectRoot 'build/portable-smoke-result.json') -Encoding UTF8
     $report | ConvertTo-Json
 } finally {

@@ -72,6 +72,8 @@ void TestEngine::initialize(const QList<StationEndpoint> &endpoints, const QJson
                     l->online = false;
                     l->parser.reset();
                     l->queryDeadline = 0;
+                    l->queryRetryAt = 0;
+                    l->cancelDeadline = 0;
                     l->reconnectAt = m_clock.elapsed() + l->backoff;
                     l->backoff = qMin(8000, l->backoff * 2);
                     publish(*l,
@@ -119,6 +121,7 @@ void TestEngine::publish(Link &l, const QString &execution, const QString &detai
                          l.ackPending.isEmpty() && !pending && !l.interrupting;
     l.view["canCancel"] = l.online && !l.run.isEmpty() && l.dispatched && !l.cancelling &&
                           !m_results.contains(l.run.value("runId").toString()) && !l.interrupting;
+    l.view["canReconcile"] = canReconcile(l);
     l.view["stepResults"] = l.progress;
     emit stationUpdated(l.view);
 }
@@ -174,6 +177,7 @@ void TestEngine::receive(Link &l, const QJsonObject &m)
         }
         l.online = true;
         l.backoff = 1000;
+        l.queryBackoff = 1000;
         l.lastRx = m_clock.elapsed();
         // Preview has no execution side effects; restore it after each verified connection.
         if (!l.recipePreview.isEmpty())
@@ -216,7 +220,8 @@ void TestEngine::receive(Link &l, const QJsonObject &m)
             clearUnknown(l, QStringLiteral("工位明确拒绝测试：") + m["reason"].toString());
             return;
         }
-        publish(l, QStringLiteral("执行中"), QStringLiteral("命令已受理，等待实际步骤和终态"));
+        publish(l, l.cancelling ? QStringLiteral("取消处理中") : QStringLiteral("执行中"),
+                QStringLiteral("命令已受理，等待实际步骤和终态"));
         return;
     }
     if (kind == "progress")
@@ -245,9 +250,9 @@ void TestEngine::receive(Link &l, const QJsonObject &m)
     if (kind == "runState")
     {
         const auto id = m["runId"].toString();
-        if (id != (l.run.isEmpty() ? l.remoteRun : l.run.value("runId").toString()))
+        if (id.isEmpty() ||
+            id != (l.run.isEmpty() ? l.remoteRun : l.run.value("runId").toString()))
             return;
-        l.queryDeadline = 0;
         if (m["state"] == "terminal")
         {
             terminal(l, m["result"].toObject());
@@ -261,8 +266,19 @@ void TestEngine::receive(Link &l, const QJsonObject &m)
         }
         if (m["state"] == "executing")
         {
+            if (m_results.contains(id) || !l.ackPending.isEmpty() || l.interrupting)
+                return;
+            resetReconciliation(l);
             l.remoteUnknown = false;
-            publish(l, QStringLiteral("执行中"), QStringLiteral("重连已确认原测试仍在执行"));
+            l.awaitingAck = false;
+            if (l.cancelling)
+            {
+                l.reconciling = true;
+                l.cancelDeadline = m_clock.elapsed() + 3000;
+            }
+            publish(l, l.cancelling ? QStringLiteral("取消处理中") : QStringLiteral("执行中"),
+                    l.cancelling ? QStringLiteral("工位仍在执行，保留占用并继续核对取消结果")
+                                 : QStringLiteral("已核对原测试仍在执行，未重发测试动作"));
             return;
         }
     }
@@ -316,6 +332,8 @@ void TestEngine::requestStart(const QJsonObject &run)
     l.cancelling = false;
     l.awaitingAck = false;
     l.remoteUnknown = false;
+    resetReconciliation(l);
+    l.lastQueryAt = -1000;
     l.progress = {};
     l.archivedResult = {};
     l.view = {{"stationId", l.endpoint.stationId},
@@ -362,15 +380,63 @@ void TestEngine::reserved(const QJsonObject &run, bool ok, const QString &error)
     publish(l, QStringLiteral("等待受理"), QStringLiteral("已记录测试身份，等待工位ACK"));
 }
 
+QString TestEngine::reconciliationRunId(const Link &l) const
+{
+    // Storage and archive confirmation own the task once a terminal has arrived.
+    if (m_stopping || !l.online || l.interrupting || !l.ackPending.isEmpty() ||
+        (!l.run.isEmpty() && !l.dispatched))
+        return {};
+    const auto id = l.run.isEmpty() ? l.remoteRun : l.run.value("runId").toString();
+    return m_results.contains(id) ? QString() : id;
+}
+
+bool TestEngine::canReconcile(const Link &l) const
+{
+    return (l.reconciling || l.cancelling) && !l.queryDeadline &&
+           m_clock.elapsed() - l.lastQueryAt >= 1000 && !reconciliationRunId(l).isEmpty();
+}
+
+void TestEngine::resetReconciliation(Link &l)
+{
+    l.reconciling = false;
+    l.queryDeadline = 0;
+    l.queryRetryAt = 0;
+    l.cancelDeadline = 0;
+    l.queryBackoff = 1000;
+}
+
 void TestEngine::query(Link &l, const QString &id)
 {
-    send(l, "query", {{"runId", id}});
-    l.queryDeadline = m_clock.elapsed() + 3000;
-    publish(l, QStringLiteral("重连对账中"), QStringLiteral("按测试编号查询，不自动重启测试"));
+    if (id.isEmpty() || id != reconciliationRunId(l) || l.queryDeadline)
+        return;
+    const auto now = m_clock.elapsed();
+    l.reconciling = true;
+    if (now - l.lastQueryAt < 1000)
+    {
+        l.queryRetryAt = l.lastQueryAt + 1000;
+        return;
+    }
+    l.queryRetryAt = 0;
+    l.cancelDeadline = 0;
+    l.lastQueryAt = now;
+    l.queryDeadline = now + 3000;
+    if (!send(l, "query", {{"runId", id}}))
+        return;
+    publish(l, QStringLiteral("状态核对中"), QStringLiteral("按测试编号查询，不自动重启测试"));
+}
+
+void TestEngine::retryReconciliation(int stationId)
+{
+    const auto found = m_links.find(stationId);
+    if (found == m_links.end() || !canReconcile(*found->second))
+        return;
+    auto &l = *found->second;
+    query(l, reconciliationRunId(l));
 }
 
 void TestEngine::clearUnknown(Link &l, const QString &reason)
 {
+    resetReconciliation(l);
     if (m_results.contains(l.run.value("runId").toString()) || m_results.contains(l.remoteRun))
     {
         publish(l, QStringLiteral("等待归档"),
@@ -431,6 +497,7 @@ void TestEngine::interruptionRecorded(const QString &id, bool ok, const QString 
             return;
         }
         const auto reason = l.interruptionReason;
+        resetReconciliation(l);
         l.interrupting = false;
         l.run = {};
         l.remoteRun.clear();
@@ -494,10 +561,11 @@ void TestEngine::terminal(Link &l, const QJsonObject &result)
         l.view["verdict"] = verdict;
         l.view["stored"] = false;
         l.awaitingAck = false;
-        publish(l, QStringLiteral("等待归档"),
-                QStringLiteral("已收到测试终态，事务提交前不确认结果"));
     }
+    resetReconciliation(l);
     m_results.insert(id, {result, true, 0});
+    publish(l, QStringLiteral("等待归档"),
+            QStringLiteral("已收到测试终态，事务提交前不确认结果"));
     emit saveRequested(result);
 }
 
@@ -547,6 +615,7 @@ void TestEngine::resultSaved(const QJsonObject &result, bool ok, bool duplicate,
         l.interruptionWriting = false;
         l.interruptionRetryAt = 0;
         l.interruptionReason.clear();
+        resetReconciliation(l);
         l.run = {};
         l.remoteRun = id;
         l.ackPending = id;
@@ -581,6 +650,7 @@ void TestEngine::cancel(int stationId)
         m_results.contains(l.run.value("runId").toString()))
         return;
     l.cancelling = true;
+    l.cancelDeadline = m_clock.elapsed() + 3000;
     send(l, "cancel", {{"runId", l.run.value("runId")}});
     publish(l, QStringLiteral("取消处理中"),
             QStringLiteral("已请求取消，等待工位真实终态；不把点击当作停止完成"));
@@ -636,12 +706,24 @@ void TestEngine::tick()
             l.awaitingAck = false;
             query(l, l.run.value("runId").toString());
         }
+        if (l.online && l.cancelling && l.cancelDeadline && now >= l.cancelDeadline)
+        {
+            // An unanswered cancel is not proof of stopping; only query its run.
+            l.cancelDeadline = 0;
+            query(l, reconciliationRunId(l));
+        }
         if (l.online && l.queryDeadline && now >= l.queryDeadline)
         {
             l.queryDeadline = 0;
+            l.queryRetryAt = now + l.queryBackoff;
+            l.queryBackoff = qMin(8000, l.queryBackoff * 2);
             publish(l, QStringLiteral("结果未知，保持占用"),
-                    QStringLiteral("查询未获响应，禁止新测试和盲目重发"));
+                    QStringLiteral("查询未获响应，保留占用；将自动重试只读核对"));
         }
+        if (l.online && l.queryRetryAt && now >= l.queryRetryAt)
+            query(l, reconciliationRunId(l));
+        if (l.view["canReconcile"].toBool() != canReconcile(l))
+            publish(l);
     }
     for (auto it = m_results.begin(); it != m_results.end(); ++it)
         if (!it->writing && now >= it->retryAt)
