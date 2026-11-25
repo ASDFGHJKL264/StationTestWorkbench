@@ -24,7 +24,7 @@
 
 历史追溯窗口按完整 SN 精确匹配，留空查询全部；可组合本地日期范围、工位和质量判定筛选。日期默认不启用，结束日期包含当天。每页最多100条，采用 ID 游标翻页；表头排序仅作用于当前页。
 
-窗口标题显示当前版本，“帮助 → 版本信息”显示版本、源码提交和 UTC 构建时间。便携目录中的 `release.json` 同时记录这些信息及主程序 SHA-256，Windows 文件属性中的产品版本也与构建版本一致。
+主窗口不显示菜单栏，顶部直接提供历史追溯、运行日志和管理员维护三个按钮。窗口标题显示当前版本；便携目录中的 `release.json` 记录版本、源码提交、UTC 构建时间及主程序 SHA-256，Windows 文件属性中的产品版本也与构建版本一致。
 
 ## 超时、备份与异常处置
 
@@ -82,7 +82,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-portable.ps1
 ```
 
-主程序包位于 `dist/StationTestWorkbench-0.3.1-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
+主程序包位于 `dist/StationTestWorkbench-0.3.2-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
 
 ## 配方与一致性
 

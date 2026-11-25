@@ -10,7 +10,6 @@
 #include <QDir>
 #include <QTimer>
 #include <QFont>
-#include <QMenuBar>
 #include <QMessageBox>
 #include <QLockFile>
 #include <QProcess>
@@ -98,21 +97,6 @@ int main(int argc, char **argv)
         });
     window.setWindowTitle(
         QStringLiteral("多工位功能测试与追溯 · v%1").arg(QCoreApplication::applicationVersion()));
-    // about 为帮助菜单中的版本信息入口。
-    auto *about =
-        window.menuBar()->addMenu(QStringLiteral("帮助"))->addAction(QStringLiteral("版本信息"));
-    // 点击版本入口时，在 window 上显示版本、提交和构建时间。
-    QObject::connect(
-        about, &QAction::triggered, &window,
-        [&window]
-        {
-            QMessageBox::information(
-                &window, QStringLiteral("版本信息"),
-                QStringLiteral("多工位功能测试与追溯\n版本：%1\n提交：%2\n构建时间（UTC）：%3")
-                    .arg(QCoreApplication::applicationVersion(),
-                         QString::fromLatin1(AppVersion::revision),
-                         QString::fromLatin1(AppVersion::builtAtUtc)));
-        });
     window.show();
     // closeMs 为部署验证时自动关闭窗口的延迟毫秒数。
     const int closeMs = parser.value("smoke-exit-ms").toInt();
