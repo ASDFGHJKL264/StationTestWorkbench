@@ -44,7 +44,7 @@ Client source files are flat in the project root and test sources are flat in `t
 
 ## Final implementation additions
 
-Schema version is 2. `recovery_pending` is included in station/SN admission indexes. Startup emits `recoverableRuns(QJsonArray fullRequests)` before initialized; network initializes with these identities and queries without replaying actions. `markInterrupted` emits `runInterrupted(runId,ok,error)`; identity is not released until this succeeds.
+Schema version is 3. `recovery_pending` is included in station/SN admission indexes. Startup emits `recoverableRuns(QJsonArray fullRequests)` and `safetyStateReady(closedRuns,suspendedStations)` before initialized; network restores identities and safety holds without replaying actions. `markInterrupted` emits `runInterrupted(runId,ok,error)`; identity is not released until this succeeds. `manual_resolutions`, `station_suspensions`, and `operational_events` preserve explicit administrator dispositions, device isolation, and operational audit. Manual disposition freezes the offline link before committing UNKNOWN and suspension atomically; closed-run terminals cannot overwrite that decision.
 
 The simulator acknowledges durable resultAck receipt with `resultConfirmed {runId}`. Client blocks the next run until this reply or an authoritative reconnect reconciliation. Lost ACK is retried. Recently committed identical terminals are re-acknowledged; conflicts do not overwrite the original.
 

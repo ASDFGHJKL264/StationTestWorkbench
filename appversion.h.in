@@ -2,7 +2,10 @@
 
 namespace AppVersion
 {
+// version 为构建时写入的应用版本号。
 inline constexpr char version[] = "@PROJECT_VERSION@";
+// revision 为构建对应的 Git 提交标识。
 inline constexpr char revision[] = "@WORKBENCH_REVISION@";
+// builtAtUtc 为本次构建的 UTC 时间。
 inline constexpr char builtAtUtc[] = "@WORKBENCH_BUILD_UTC@";
 }

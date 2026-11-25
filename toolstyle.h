@@ -5,8 +5,10 @@
 
 namespace ToolStyle
 {
+// 生成工作台固定使用的浅色配色。
 inline QPalette lightPalette()
 {
+    // palette 保存控件各状态和文字区域的颜色。
     QPalette palette;
     palette.setColor(QPalette::All, QPalette::Window, QColor("#f3f3f3"));
     palette.setColor(QPalette::All, QPalette::WindowText, QColor("#222222"));
@@ -39,6 +41,7 @@ inline QPalette lightPalette()
     return palette;
 }
 
+// 设置统一的控件风格和浅色配色；application 为当前应用。
 inline void configureApplication(QApplication &application)
 {
     // Native dark controls cannot be mixed with the interface's fixed light surfaces.
@@ -46,6 +49,7 @@ inline void configureApplication(QApplication &application)
     application.setPalette(lightPalette());
 }
 
+// 返回工作台控件的统一样式规则。
 // Control behavior stays with Qt; the light palette covers every color group.
 inline QString stylesheet()
 {

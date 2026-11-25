@@ -34,6 +34,14 @@ __pycache__/
 id_rsa*
 id_ecdsa*
 id_ed25519*
+admin-auth.json
+active-data-dir.json
+restored-from.json
+**/maintenance/runtime.json
+.workbench.lock
+/maintenance/
+/backups/
+/data/
 *.exe
 *.dll
 *.obj

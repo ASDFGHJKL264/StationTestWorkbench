@@ -15,7 +15,14 @@ D:/demoqt6/
 │  ├─ testengine.h/.cpp         网络执行状态机
 │  ├─ repository.h/.cpp         SQLite事务、恢复、历史与导出
 │  ├─ workbenchcontroller.h/.cpp 应用协调与线程生命周期
+│  ├─ workbenchmaintenance.cpp   维护门禁、自动备份及恢复切换协调
+│  ├─ adminaccess.h/.cpp         本机管理员认证与短时会话
+│  ├─ runtimeconfiguration.h/.cpp 超时设置与数据目录切换记录
+│  ├─ databasemaintenance.h/.cpp 独立连接的一致性备份、验证与恢复
+│  ├─ maintenancedialog.h/.cpp   管理员维护面板
 │  ├─ mainwindow.h/.cpp         操作员主窗口
+│  ├─ historydialog.h/.cpp      独立历史追溯、查询及导出窗口
+│  ├─ logdialog.h/.cpp          独立运行日志窗口
 │  ├─ models.h/.cpp             工位、步骤、历史及日志模型
 │  ├─ toolstyle.h               界面样式
 │  ├─ tests/                    平铺的独立测试、可选联调和历史查询基准
@@ -47,7 +54,7 @@ flowchart TD
     Runtime -. TCP .-> Simulator[独立 StationSimulator 工程]
 ```
 
-`TestEngine` 的实现仍只处理测试业务与网络，不引用窗口、控制器或数据库。`WorkbenchController` 创建并连接网络、数据库及日志工作线程。归入一个运行逻辑库不改变线程归属、事务顺序或业务接口。
+`TestEngine` 的实现仍只处理测试业务与网络，不引用窗口、控制器或数据库。`WorkbenchController` 创建并连接网络、数据库、日志及维护工作线程；维护使用独立连接，耗时快照与验证不排在实时归档队列中。归入一个运行逻辑库不改变线程归属、事务顺序或业务接口。
 
 工作台默认不查找或编译模拟器。模拟器的源码、CMake、独立测试不引用工作台源码，依赖 Qt Core、Network、Widgets。两工程分别维护配方契约、STW2编解码和样式；模拟器命名空间 `SimulatorDomain`、`SimulatorWire`、`SimulatorStyle` 避免可选联调时发生符号冲突。
 
@@ -63,6 +70,9 @@ flowchart TD
 | test_repository.cpp | RepositoryTests：事务、恢复、历史和异常SN导出 |
 | test_workflow.cpp | WorkflowTests：真实TCP、故障恢复、归档确认与批量流程 |
 | test_models.cpp | ModelTests：表格模型和显示 |
+| test_adminaccess.cpp | AdminAccessTests：摘要凭据、认证冷却和会话期限 |
+| test_database_maintenance.cpp | DatabaseMaintenanceTests：WAL快照、内容校验、新目录恢复及旧库兼容 |
+| test_maintenance_workflow.cpp | MaintenanceWorkflowTests：权限门禁、异步恢复切换及原库损坏恢复 |
 | test_window.cpp | WindowTests：独立异常SN导出交互 |
 | test_window_simulator.cpp | 可选 WindowSimulatorTests：工作台与模拟设备联调 |
 | test_simulator_window.cpp | 可选 SimulatorWindowTests：两个窗口与配方预览联调 |

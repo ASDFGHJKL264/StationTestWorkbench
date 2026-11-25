@@ -9,6 +9,7 @@
 
 namespace
 {
+// 识别判定文字并取色；text 为判定，foreground 接收对应的文字颜色。
 bool qualityColor(const QString &text, QColor *foreground)
 {
     if (text == "PASS")
@@ -29,8 +30,10 @@ QualityDelegate::QualityDelegate(QObject *parent) : QStyledItemDelegate(parent) 
 void QualityDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                             const QModelIndex &index) const
 {
+    // item 保存目标单元格的绘制状态和配色。
     QStyleOptionViewItem item(option);
     initStyleOption(&item, index);
+    // foreground 接收判定文字对应的颜色。
     QColor foreground;
     if (qualityColor(item.text, &foreground) && (item.state & QStyle::State_Enabled) &&
         !(item.state & QStyle::State_Selected))
@@ -45,10 +48,12 @@ QSize QualityDelegate::sizeHint(const QStyleOptionViewItem &option, const QModel
 
 namespace
 {
+// 格式化测量值；v 为数值或尚未测量的空值。
 QString number(const QJsonValue &v)
 {
     return v.isDouble() ? QString::number(v.toDouble(), 'g', 8) : QStringLiteral("—");
 }
+// 生成判定文字画刷；verdict 为质量判定。
 QVariant verdictBrush(const QString &verdict)
 {
     if (verdict == "PASS")
@@ -59,6 +64,7 @@ QVariant verdictBrush(const QString &verdict)
         return QBrush(QColor("#a8650a"));
     return QBrush(QColor("#64748b"));
 }
+// 将执行阶段转换成界面文字；value 为后台执行状态。
 QString executionText(const QString &value)
 {
     if (value == "RESERVED")
@@ -71,8 +77,10 @@ QString executionText(const QString &value)
         return QStringLiteral("中断 / 未知");
     return value;
 }
+// 转换为本地显示时间；text 为后台记录的时间字符串。
 QString localTime(const QString &text)
 {
+    // dt 保存解析后的时间，供转换到本地时区。
     auto dt = QDateTime::fromString(text, Qt::ISODateWithMs);
     if (!dt.isValid())
         dt = QDateTime::fromString(text, Qt::ISODate);
@@ -102,9 +110,11 @@ int StationModel::rowForStation(int id) const
 }
 void StationModel::updateStation(const QJsonObject &station)
 {
+    // id 为本次更新对应的工位编号。
     const int id = station["stationId"].toInt();
     if (id < 1 || id > 4)
         return;
+    // old 为该工位已有的行号，负数表示尚未显示。
     const int old = rowForStation(id);
     if (old >= 0)
     {
@@ -124,6 +134,7 @@ QVariant StationModel::data(const QModelIndex &i, int role) const
     if (!i.isValid() || i.row() < 0 || i.row() >= rowCount() || i.column() < 0 ||
         i.column() >= columnCount())
         return {};
+    // row 为当前单元格所属工位的状态快照。
     const auto row = m_rows[i.row()];
     if (role == StationIdRole)
         return row["stationId"].toInt();
@@ -164,6 +175,7 @@ QVariant StationModel::data(const QModelIndex &i, int role) const
 }
 QVariant StationModel::headerData(int s, Qt::Orientation o, int role) const
 {
+    // names 保存工位表各列的标题。
     static const QStringList names{QStringLiteral("工位"),     QStringLiteral("连接"),
                                    QStringLiteral("执行阶段"), QStringLiteral("产品 SN"),
                                    QStringLiteral("配方版本"), QStringLiteral("测试判定"),
@@ -184,6 +196,7 @@ int StepModel::columnCount(const QModelIndex &parent) const
 }
 void StepModel::setSteps(const QJsonArray &steps)
 {
+    // same 表示新旧步骤的数量和顺序是否一致。
     bool same = steps.size() == m_rows.size();
     for (int i = 0; same && i < steps.size(); ++i)
         same = steps[i].toObject()["stepId"] == m_rows[i].toObject()["stepId"];
@@ -205,8 +218,11 @@ QVariant StepModel::data(const QModelIndex &i, int role) const
     if (!i.isValid() || i.row() < 0 || i.row() >= rowCount() || i.column() < 0 ||
         i.column() >= columnCount())
         return {};
+    // row 为当前单元格所属步骤的限值和结果。
     const auto row = m_rows[i.row()].toObject();
+    // measured 表示该步骤是否已经收到实测值。
     const bool measured = row["value"].isDouble();
+    // verdict 为该步骤当前应显示的待测、待判定或质量结果。
     const QString verdict =
         !measured ? QStringLiteral("待测")
                   : (row["passed"].isBool() ? (row["passed"].toBool() ? "PASS" : "FAIL")
@@ -239,6 +255,7 @@ QVariant StepModel::data(const QModelIndex &i, int role) const
 }
 QVariant StepModel::headerData(int s, Qt::Orientation o, int role) const
 {
+    // names 保存测试步骤表各列的标题。
     static const QStringList names{QStringLiteral("序号"),     QStringLiteral("测试项目"),
                                    QStringLiteral("允许范围"), QStringLiteral("实测值"),
                                    QStringLiteral("单位"),     QStringLiteral("判定")};
@@ -268,9 +285,11 @@ QJsonObject HistoryModel::recordAt(int row) const
 }
 int HistoryModel::lastId() const
 {
+    // lowest 保存当前页找到的最小记录编号。
     int lowest = 0;
     for (const auto &value : m_rows)
     {
+        // id 为当前检查记录的数据库编号。
         const int id = value.toObject()["id"].toInt();
         if (id > 0 && (!lowest || id < lowest))
             lowest = id;
@@ -282,6 +301,7 @@ QVariant HistoryModel::data(const QModelIndex &i, int role) const
     if (!i.isValid() || i.row() < 0 || i.row() >= rowCount() || i.column() < 0 ||
         i.column() >= columnCount())
         return {};
+    // row 为当前单元格所属的历史记录。
     const auto row = recordAt(i.row());
     if (role == Qt::UserRole)
         return QVariant::fromValue(row);
@@ -290,6 +310,7 @@ QVariant HistoryModel::data(const QModelIndex &i, int role) const
         // Sort actual time values, not the shortened month/day string shown in the view.
         if (i.column() == 0)
         {
+            // dt 保存历史开始时间，供按真实时间先后排序。
             auto dt = QDateTime::fromString(row["startedAt"].toString(), Qt::ISODateWithMs);
             if (!dt.isValid())
                 dt = QDateTime::fromString(row["startedAt"].toString(), Qt::ISODate);
@@ -297,6 +318,7 @@ QVariant HistoryModel::data(const QModelIndex &i, int role) const
         }
         if (i.column() == 1)
             return row["stationId"].toInt();
+        // keys 将历史表列号对应到记录字段。
         const QStringList keys{"startedAt", "stationId", "sn",   "recipeVersion",
                                "execution", "verdict",   "runId"};
         return row[keys[i.column()]].toString();
@@ -332,6 +354,7 @@ QVariant HistoryModel::data(const QModelIndex &i, int role) const
 }
 QVariant HistoryModel::headerData(int s, Qt::Orientation o, int role) const
 {
+    // names 保存历史记录表各列的标题。
     static const QStringList names{QStringLiteral("开始时间（本地）"), QStringLiteral("工位"),
                                    QStringLiteral("产品 SN"),          QStringLiteral("配方版本"),
                                    QStringLiteral("执行结果"),         QStringLiteral("判定"),
@@ -353,6 +376,7 @@ QVariant BoundedLogModel::data(const QModelIndex &i, int role) const
 {
     if (!i.isValid() || i.row() < 0 || i.row() >= rowCount())
         return {};
+    // row 为当前显示的日志条目。
     const auto &row = m_rows[i.row()];
     if (role == Qt::DisplayRole)
         return row.time +
@@ -371,6 +395,7 @@ void BoundedLogModel::append(const QString &text, bool warning)
         m_rows.removeFirst();
         endRemoveRows();
     }
+    // next 为新日志追加到列表中的行号。
     const int next = m_rows.size();
     beginInsertRows({}, next, next);
     m_rows.append(

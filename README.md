@@ -18,9 +18,25 @@
 
 连接正常但业务应答缺失时，程序会退避重查原测试的状态。操作员也可在允许核对时点击“重新核对”；查询不会重新启动测试，也不会将未知结果直接判为完成。长期离线或设备无法提供结果时继续保留占用，需要恢复原设备后核对。
 
-历史查询按完整 SN 精确匹配，留空查询全部；可组合本地日期范围、工位和质量判定筛选。日期默认不启用，结束日期包含当天。每页最多100条，采用 ID 游标翻页；表头排序仅作用于当前页。
+主窗口保留工位状态、产品与配方、当前测试。顶栏可分别打开“历史追溯”“运行日志”“管理员维护”子窗口；关闭子窗口不停止测试，关闭主窗口会一并关闭子窗口并停止后台。
+
+界面预览：[主窗口](docs/workbench-preview.png)、[历史追溯](docs/history-preview.png)、[维护中心](docs/maintenance-preview.png)。
+
+历史追溯窗口按完整 SN 精确匹配，留空查询全部；可组合本地日期范围、工位和质量判定筛选。日期默认不启用，结束日期包含当天。每页最多100条，采用 ID 游标翻页；表头排序仅作用于当前页。
 
 窗口标题显示当前版本，“帮助 → 版本信息”显示版本、源码提交和 UTC 构建时间。便携目录中的 `release.json` 同时记录这些信息及主程序 SHA-256，Windows 文件属性中的产品版本也与构建版本一致。
+
+## 超时、备份与异常处置
+
+“管理员维护”中心提供本机管理员设置和登录，备份恢复、测试超时、异常处置和操作记录分别在独立子窗口打开。首次使用自行设置账号及至少10字符的密码，没有默认密码。认证仅保存随机盐和密码派生摘要，会话有效5分钟；凭据与业务数据库分开保存在本地数据目录的 `maintenance/`。这是可信本机工作站的维护权限，不用于抵御同一系统账户直接修改文件，也不提供联网多用户认证。
+
+整轮测试默认120秒、每步骤默认30秒，可由管理员修改，仅对之后开始的新测试生效。计时从实际下发动作开始；重复进度、断线或重新核对不延长期限。超时会请求一次取消并继续核对，保持工位/SN占用；最终质量判定仍按设备真实终态计算。超时事件单独留存，不因迟到PASS而消失。
+
+数据库就绪后每日自动生成一份备份，保留最近7份本程序生成的自动备份；管理员可随时手动备份及验证。备份在独立线程和连接中用 SQLite `VACUUM INTO` 生成包含已提交WAL数据的一致快照，再检查完整性、外键、模式、配方及测试明细，成功后原子发布。低磁盘空间会提示，备份不包含管理员凭据。实现依据见 [SQLite一致快照说明](https://sqlite.org/lang_vacuum.html#vacuum_with_an_into_clause)。
+
+恢复时先选择备份，再选择新空数据目录。当前有执行中、未知、未归档或待工位确认任务时禁止恢复切换。验证成功后将数据库恢复到新目录，复制本机维护设置；点击“切换并重启”才启用。原数据库保留，所选备份之后的新记录仍在原目录。桌面原入口下次启动会沿保存的切换记录打开新库。同一数据目录只允许一个工作台；即使原库损坏、后台初始化失败，管理员也可从维护入口恢复。
+
+长期离线任务可由管理员填写原因、确认设备已停止后人工结算。程序先冻结连接，再将UNKNOWN结果、处置记录和工位停用状态放在同一事务提交；失败保留原占用。之后须确认旧设备已复位或更换并填写原因才能重新启用。旧测试编号的迟到结果不会覆盖人工结算，也不会得到结果确认；若旧设备带着该编号重连会再次停用。演示模拟器若保留旧运行，应换用新的模拟器状态目录模拟设备复位。审计页展示最近100项记录，完整记录保存在数据库。
 
 历史记录页支持两种导出：
 
@@ -42,10 +58,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -Si
 在 Qt Creator 中打开根目录 `CMakeLists.txt`，选择 Qt 6 MinGW 64位套件。主程序需要 Core、Network、Sql、Widgets，测试额外需要 Qt Test。
 
 ```powershell
-# 独立构建及7组测试，不要求模拟器源码存在：
+# 独立构建及10组测试，不要求模拟器源码存在：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -BatchRuns 100
 
-# 另外启用两项目联调，执行10组工作台测试：
+# 另外启用两项目联调，执行13组工作台测试：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -WithSimulator -BatchRuns 100
 ```
 
@@ -66,7 +82,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-portable.ps1
 ```
 
-主程序包位于 `dist/StationTestWorkbench-0.2.0-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
+主程序包位于 `dist/StationTestWorkbench-0.3.0-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
 
 ## 配方与一致性
 
@@ -89,6 +105,10 @@ domain.* stationendpoint.h 配方、身份、质量判定和连接配置
 testengine.*             工位通信与测试执行状态机
 repository.*             SQLite事务、恢复、历史、HTML与异常SN导出
 workbenchcontroller.*    应用协调与线程生命周期
+workbenchmaintenance.cpp 管理员门禁、维护协调、每日备份与新库切换
+adminaccess.* runtimeconfiguration.* 本机认证、时限设置和数据目录指向
+databasemaintenance.* maintenancedialog.* 独立快照验证恢复、维护窗口
+historydialog.* logdialog.* 独立历史追溯和运行日志窗口
 framecodec.* asyncfilelogger.* 通信帧与异步日志
 mainwindow.* models.* toolstyle.h 窗口、表格模型和样式
 tests/                   独立测试、可选联调及历史查询基准
