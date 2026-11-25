@@ -35,8 +35,8 @@ class MaintenanceDialog final : public QDialog
     void buildExceptionPage();
     // 构建最近一百条维护记录表。
     void buildAuditPage();
-    // 为维护子窗口添加操作结果和关闭按钮。
-    void addWindowFooter(QDialog *window, QVBoxLayout *layout);
+    // 为维护子窗口添加动态操作结果。
+    void addWindowStatus(QDialog *window, QVBoxLayout *layout);
     // 核验会话后打开指定维护子窗口。
     void openWindow(QDialog *window);
     // 接收 overview 后更新异常、工位、审计和配置快照。

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(StationTestWorkbench VERSION 0.3.0 LANGUAGES CXX)
+project(StationTestWorkbench VERSION 0.3.1 LANGUAGES CXX)
 # 指定项目源码使用的 C++ 语言标准。
 set(CMAKE_CXX_STANDARD 17)
 # 要求编译器严格支持所选 C++ 标准。

@@ -281,12 +281,7 @@ void HistoryDialog::buildUi()
     m_status->setObjectName("historyStatus");
     m_status->setWordWrap(true);
     footer->addWidget(m_status, 1);
-    // 关闭仅隐藏历史窗口，查询与导出继续由共享控制器完成。
-    auto *close = new QPushButton(QStringLiteral("关闭"), this);
-    close->setObjectName("closeHistoryButton");
-    footer->addWidget(close);
     historyLayout->addLayout(footer);
-    connect(close, &QPushButton::clicked, this, &QDialog::close);
 }
 void HistoryDialog::showHistorySelection()
 {

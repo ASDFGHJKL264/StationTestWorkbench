@@ -21,7 +21,6 @@
 #include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScreen>
@@ -202,11 +201,6 @@ void MainWindow::buildNavigation()
     navigation->addAction(logs);
     navigation->addSeparator();
     navigation->addAction(maintenance);
-    // 菜单与工具栏使用同一动作，避免创建重复窗口。
-    auto *windows = menuBar()->addMenu(QStringLiteral("窗口"));
-    windows->addAction(history);
-    windows->addAction(logs);
-    menuBar()->addMenu(QStringLiteral("维护"))->addAction(maintenance);
     connect(history, &QAction::triggered, this, [this] { openWindow(m_historyDialog); });
     connect(logs, &QAction::triggered, this, [this] { openWindow(m_logDialog); });
     connect(maintenance, &QAction::triggered, this,

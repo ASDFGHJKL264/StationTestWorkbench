@@ -18,7 +18,7 @@
 
 连接正常但业务应答缺失时，程序会退避重查原测试的状态。操作员也可在允许核对时点击“重新核对”；查询不会重新启动测试，也不会将未知结果直接判为完成。长期离线或设备无法提供结果时继续保留占用，需要恢复原设备后核对。
 
-主窗口保留工位状态、产品与配方、当前测试。顶栏可分别打开“历史追溯”“运行日志”“管理员维护”子窗口；关闭子窗口不停止测试，关闭主窗口会一并关闭子窗口并停止后台。
+主窗口保留工位状态、产品与配方、当前测试。顶栏按钮分别打开“历史追溯”“运行日志”“管理员维护”子窗口，各入口只保留一处。所有业务子窗口使用标题栏右上角的 × 关闭；关闭子窗口不停止测试，关闭主窗口会一并关闭子窗口并停止后台。
 
 界面预览：[主窗口](docs/workbench-preview.png)、[历史追溯](docs/history-preview.png)、[维护中心](docs/maintenance-preview.png)。
 
@@ -82,7 +82,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-portable.ps1
 ```
 
-主程序包位于 `dist/StationTestWorkbench-0.3.0-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
+主程序包位于 `dist/StationTestWorkbench-0.3.1-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
 
 ## 配方与一致性
 

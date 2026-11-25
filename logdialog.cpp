@@ -6,7 +6,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListView>
-#include <QPushButton>
 #include <QScreen>
 #include <QScrollBar>
 #include <QVBoxLayout>
@@ -25,7 +24,7 @@ LogDialog::LogDialog(WorkbenchController *controller, QWidget *parent)
     if (auto *screen = QGuiApplication::primaryScreen())
         resize(qMin(920, screen->availableGeometry().width() - 40),
                qMin(600, screen->availableGeometry().height() - 60));
-    // 排列日志列表和窗口操作按钮。
+    // 排列日志列表和条数。
     auto *layout = new QVBoxLayout(this);
     m_logView = new QListView(this);
     m_logView->setObjectName("logView");
@@ -34,18 +33,13 @@ LogDialog::LogDialog(WorkbenchController *controller, QWidget *parent)
     m_logView->setWordWrap(true);
     m_logView->setSelectionMode(QAbstractItemView::ExtendedSelection);
     layout->addWidget(m_logView, 1);
-    // 保持关闭入口位于列表之外。
+    // 在列表下方显示当前缓存条数。
     auto *footer = new QHBoxLayout;
     m_count = new QLabel(QStringLiteral("0 条"), this);
     m_count->setObjectName("logCountLabel");
     footer->addWidget(m_count);
     footer->addStretch();
-    // 关闭仅隐藏窗口，后台缓存继续更新。
-    auto *close = new QPushButton(QStringLiteral("关闭"), this);
-    close->setObjectName("closeLogButton");
-    footer->addWidget(close);
     layout->addLayout(footer);
-    connect(close, &QPushButton::clicked, this, &QDialog::close);
     connect(controller, &WorkbenchController::logMessage, this,
             [this](const QString &text, bool warning)
             {

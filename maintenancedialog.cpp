@@ -3,7 +3,6 @@
 #include "toolstyle.h"
 #include <QCheckBox>
 #include <QDateTime>
-#include <QDialogButtonBox>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -131,11 +130,11 @@ MaintenanceDialog::MaintenanceDialog(WorkbenchController *controller, QWidget *p
     setWindowTitle(QStringLiteral("管理员维护"));
     setStyleSheet(ToolStyle::stylesheet());
     setPalette(ToolStyle::lightPalette());
-    resize(620, 390);
+    resize(620, 350);
     // 限制窗口尺寸，适配当前屏幕可用区域。
     if (auto *screen = QGuiApplication::primaryScreen())
         resize(qMin(620, screen->availableGeometry().width() - 40),
-               qMin(390, screen->availableGeometry().height() - 60));
+               qMin(350, screen->availableGeometry().height() - 60));
     // 保存维护窗口的整体布局。
     auto *layout = new QVBoxLayout(this);
     buildAuthentication(layout);
@@ -168,19 +167,15 @@ MaintenanceDialog::MaintenanceDialog(WorkbenchController *controller, QWidget *p
     m_status = note({}, this);
     m_status->setObjectName("maintenanceStatusLabel");
     m_status->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_status->hide();
     layout->addWidget(m_status);
-    // 保存窗口底部刷新和关闭按钮的布局。
+    // 保存维护记录的刷新入口。
     auto *footer = new QHBoxLayout;
     m_refresh = new QPushButton(QStringLiteral("刷新维护记录"), this);
     m_refresh->setObjectName("maintenanceRefreshButton");
     footer->addWidget(m_refresh);
     footer->addStretch();
-    // 使用关闭角色退出维护窗口，不影响工作台运行。
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
-    buttons->button(QDialogButtonBox::Close)->setText(QStringLiteral("关闭"));
-    footer->addWidget(buttons);
     layout->addLayout(footer);
-    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     connect(m_refresh, &QPushButton::clicked, m_controller,
             &WorkbenchController::refreshMaintenance);
     connect(m_controller, &WorkbenchController::maintenanceReady, this,
@@ -369,7 +364,7 @@ void MaintenanceDialog::buildDataPage()
     backupLayout->addLayout(actions);
     layout->addWidget(backupGroup);
     layout->addStretch();
-    addWindowFooter(m_dataWindow, layout);
+    addWindowStatus(m_dataWindow, layout);
     connect(m_backup, &QPushButton::clicked, this, &MaintenanceDialog::backup);
     connect(m_validate, &QPushButton::clicked, this, &MaintenanceDialog::validateBackup);
     connect(m_restore, &QPushButton::clicked, this, &MaintenanceDialog::restore);
@@ -418,7 +413,7 @@ void MaintenanceDialog::buildTimeoutPage()
     form->addRow(m_saveTimeouts);
     layout->addWidget(timeoutGroup);
     layout->addStretch();
-    addWindowFooter(m_timeoutWindow, layout);
+    addWindowStatus(m_timeoutWindow, layout);
     connect(m_runSeconds, &QSpinBox::valueChanged, this, [this] { m_timeoutDirty = true; });
     connect(m_stepSeconds, &QSpinBox::valueChanged, this, [this] { m_timeoutDirty = true; });
     connect(m_saveTimeouts, &QPushButton::clicked, this,
@@ -496,7 +491,7 @@ void MaintenanceDialog::buildExceptionPage()
     splitter->setStretchFactor(0, 3);
     splitter->setStretchFactor(1, 2);
     layout->addWidget(splitter, 1);
-    addWindowFooter(m_exceptionWindow, layout);
+    addWindowStatus(m_exceptionWindow, layout);
     connect(m_exceptions, &QTableWidget::itemSelectionChanged, this,
             &MaintenanceDialog::updateSelectionActions);
     connect(m_suspended, &QTableWidget::itemSelectionChanged, this,
@@ -523,22 +518,18 @@ void MaintenanceDialog::buildAuditPage()
                   m_auditWindow);
     m_audit->setObjectName("maintenanceAuditTable");
     layout->addWidget(m_audit, 1);
-    addWindowFooter(m_auditWindow, layout);
+    addWindowStatus(m_auditWindow, layout);
 }
 
-void MaintenanceDialog::addWindowFooter(QDialog *window, QVBoxLayout *layout)
+void MaintenanceDialog::addWindowStatus(QDialog *window, QVBoxLayout *layout)
 {
     // 显示当前维护动作的完成状态或错误。
     auto *status = note({}, window);
     status->setObjectName(window->objectName() + "StatusLabel");
     status->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    status->hide();
     layout->addWidget(status);
     m_windowStatuses.append(status);
-    // 关闭当前子窗口，保留已输入的数据和后台任务。
-    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, window);
-    buttons->button(QDialogButtonBox::Close)->setText(QStringLiteral("关闭"));
-    layout->addWidget(buttons);
-    connect(buttons, &QDialogButtonBox::rejected, window, &QDialog::reject);
 }
 
 void MaintenanceDialog::openWindow(QDialog *window)
@@ -724,10 +715,12 @@ void MaintenanceDialog::updateSelectionActions()
 void MaintenanceDialog::showMessage(const QString &message, bool error)
 {
     m_status->setText(message);
+    m_status->setVisible(!message.isEmpty());
     m_status->setStyleSheet(error ? "QLabel { color:#a82432; }" : "QLabel { color:#333333; }");
     for (auto *status : m_windowStatuses)
     {
         status->setText(message);
+        status->setVisible(!message.isEmpty());
         status->setStyleSheet(error ? "QLabel { color:#a82432; }" : "QLabel { color:#333333; }");
     }
 }
