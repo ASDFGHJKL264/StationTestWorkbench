@@ -17,12 +17,13 @@ D:/demoqt6/
 │  ├─ workbenchcontroller.h/.cpp 应用协调与线程生命周期
 │  ├─ workbenchmaintenance.cpp   维护门禁、自动备份及恢复切换协调
 │  ├─ adminaccess.h/.cpp         本机管理员认证与短时会话
-│  ├─ runtimeconfiguration.h/.cpp 超时设置与数据目录切换记录
+│  ├─ runtimeconfiguration.h/.cpp 超时、工位连接与数据目录切换记录
 │  ├─ databasemaintenance.h/.cpp 独立连接的一致性备份、验证与恢复
 │  ├─ maintenancedialog.h/.cpp   管理员维护面板
 │  ├─ mainwindow.h/.cpp         操作员主窗口
 │  ├─ historydialog.h/.cpp      独立历史追溯、查询及导出窗口
 │  ├─ logdialog.h/.cpp          独立运行日志窗口
+│  ├─ stationconfigurationdialog.h/.cpp 独立工位IP和端口配置窗口
 │  ├─ models.h/.cpp             工位、步骤、历史及日志模型
 │  ├─ toolstyle.h               界面样式
 │  ├─ tests/                    平铺的独立测试、可选联调和历史查询基准

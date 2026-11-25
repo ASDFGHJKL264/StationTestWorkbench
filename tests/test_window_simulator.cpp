@@ -17,6 +17,7 @@
 #include <QAction>
 #include <QDialog>
 #include <QListView>
+#include <QSpinBox>
 
 class WindowSimulatorTests final : public QObject
 {
@@ -189,6 +190,74 @@ class WindowSimulatorTests final : public QObject
         window.close();
         QVERIFY(!historyDialog->isVisible());
         QVERIFY(!logDialog->isVisible());
+    }
+    // 验证保存新端口不打断原测试，重开工作台后实际连接新设备。
+    void configuredEndpointAppliesAfterRestartWithoutInterruptingRun()
+    {
+        // 隔离两个真实TCP工位及工作台数据。
+        QTemporaryDir directory;
+        // 原工位保留足够执行时间以覆盖在途配置保存。
+        StationOptions originalOptions;
+        originalOptions.port = 0;
+        originalOptions.stepMs = 350;
+        originalOptions.dataDirectory = directory.filePath("original-station");
+        // 新工位使用独立状态目录和故障判定，便于识别连接切换。
+        StationOptions replacementOptions = originalOptions;
+        replacementOptions.stepMs = 10;
+        replacementOptions.failStep = "current";
+        replacementOptions.dataDirectory = directory.filePath("replacement-station");
+        // 持有保存配置前的设备服务。
+        StationServer original(originalOptions);
+        // 持有下次启动应该接入的替代设备服务。
+        StationServer replacement(replacementOptions);
+        // 接收工位启动或配置失败原因。
+        QString error;
+        QVERIFY2(original.start(&error), qPrintable(error));
+        QVERIFY2(replacement.start(&error), qPrintable(error));
+        // 保留桌面原启动参数，重开时仍须优先读取配置文件。
+        const QList<StationEndpoint> startup{{1, "127.0.0.1", original.port()}};
+        // 两次启动使用同一个真实业务数据目录。
+        const auto client = directory.filePath("client");
+        {
+            // 缓存原工位执行和归档进度。
+            QJsonObject view;
+            // 启动原连接并执行一次真实测试。
+            MainWindow window(client, startup);
+            connect(window.controller(), &WorkbenchController::stationUpdated, &window,
+                    [&](const QJsonObject &snapshot) { view = snapshot; });
+            window.show();
+            QTRY_VERIFY(view["canStart"].toBool());
+            window.findChild<QLineEdit *>("snInput")->setText("BEFORE-CONNECTION-CHANGE");
+            QTRY_VERIFY(window.findChild<QPushButton *>("startButton")->isEnabled());
+            QTest::mouseClick(window.findChild<QPushButton *>("startButton"), Qt::LeftButton);
+            QTRY_VERIFY(view["canCancel"].toBool());
+            window.findChild<QAction *>("openStationConfigurationAction")->trigger();
+            window.findChild<QSpinBox *>("stationPort1")->setValue(replacement.port());
+            QTest::mouseClick(window.findChild<QPushButton *>("saveStationConfigurationButton"),
+                              Qt::LeftButton);
+            QVERIFY(
+                QFileInfo::exists(QDir(client).filePath("maintenance/station-connections.json")));
+            QTRY_VERIFY(view["stored"].toBool() && view["canStart"].toBool());
+            QCOMPARE(view["verdict"].toString(), QString("PASS"));
+            window.close();
+        }
+        original.stop();
+        {
+            // 缓存重开后的设备连接和结果，旧端口已不可连接。
+            QJsonObject view;
+            // 显式传入原启动参数，验证保存的逐工位配置仍能覆盖它。
+            MainWindow window(client, startup);
+            connect(window.controller(), &WorkbenchController::stationUpdated, &window,
+                    [&](const QJsonObject &snapshot) { view = snapshot; });
+            window.show();
+            QTRY_VERIFY(view["canStart"].toBool());
+            window.findChild<QLineEdit *>("snInput")->setText("AFTER-CONNECTION-CHANGE");
+            QTRY_VERIFY(window.findChild<QPushButton *>("startButton")->isEnabled());
+            QTest::mouseClick(window.findChild<QPushButton *>("startButton"), Qt::LeftButton);
+            QTRY_VERIFY(view["stored"].toBool() && view["canStart"].toBool());
+            QCOMPARE(view["verdict"].toString(), QString("FAIL"));
+            window.close();
+        }
     }
 };
 QTEST_MAIN(WindowSimulatorTests)

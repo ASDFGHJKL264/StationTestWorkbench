@@ -16,6 +16,7 @@ class QCloseEvent;
 class HistoryDialog;
 class LogDialog;
 class MaintenanceDialog;
+class StationConfigurationDialog;
 
 class MainWindow final : public QMainWindow
 {
@@ -39,7 +40,7 @@ class MainWindow final : public QMainWindow
   private:
     // 创建工位表、分行输入和当前测试区域。
     void buildUi();
-    // 创建历史、日志及管理员维护入口。
+    // 创建历史、日志、工位配置及管理员维护入口。
     void buildNavigation();
     // 将所选工位的状态和步骤显示到当前测试区。
     void showSelectedStation();
@@ -77,4 +78,6 @@ class MainWindow final : public QMainWindow
     LogDialog *m_logDialog;
     // 首次打开时创建管理员维护窗口。
     MaintenanceDialog *m_maintenanceDialog = nullptr;
+    // 复用独立工位连接配置窗口，保存结果不改变当前连接。
+    StationConfigurationDialog *m_stationConfigurationDialog;
 };

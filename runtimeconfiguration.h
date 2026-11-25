@@ -1,4 +1,6 @@
 #pragma once
+#include "stationendpoint.h"
+#include <QList>
 #include <QString>
 
 namespace RuntimeConfiguration
@@ -14,6 +16,13 @@ struct ExecutionLimits
 ExecutionLimits loadLimits(const QString &directory, QString *error = nullptr);
 // 原子保存之后新测试使用的期限。
 bool saveLimits(const QString &directory, const ExecutionLimits &limits, QString *error);
+// 读取各工位连接；缺少文件时使用启动参数，损坏时返回空列表并填写 error。
+QList<StationEndpoint> loadStationEndpoints(const QString &directory,
+                                            const QList<StationEndpoint> &fallback,
+                                            QString *error = nullptr);
+// 校验并原子保存各工位连接，之后启动时使用，失败时保留原配置。
+bool saveStationEndpoints(const QString &directory, const QList<StationEndpoint> &endpoints,
+                          QString *error);
 // 沿已验证恢复记录查找当前应使用的数据目录，拒绝循环或损坏的指向。
 QString resolveDataDirectory(const QString &directory, QString *error);
 // 为下次启动保存恢复后的数据目录，原库文件完整保留。

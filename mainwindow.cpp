@@ -2,6 +2,8 @@
 #include "historydialog.h"
 #include "logdialog.h"
 #include "maintenancedialog.h"
+#include "stationconfigurationdialog.h"
+#include "runtimeconfiguration.h"
 #include "workbenchcontroller.h"
 #include "models.h"
 #include "toolstyle.h"
@@ -27,6 +29,7 @@
 #include <QStatusBar>
 #include <QTableView>
 #include <QToolBar>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace
@@ -73,6 +76,13 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
       m_historyDialog(new HistoryDialog(m_controller, this)),
       m_logDialog(new LogDialog(m_controller, this))
 {
+    // 保存连接配置读取失败的原因，损坏时暂停接入并打开修复窗口。
+    QString connectionError;
+    // 已保存的连接优先于启动脚本提供的初始地址。
+    const auto configuredEndpoints =
+        RuntimeConfiguration::loadStationEndpoints(dataDirectory, endpoints, &connectionError);
+    m_stationConfigurationDialog = new StationConfigurationDialog(
+        dataDirectory, connectionError.isEmpty() ? configuredEndpoints : endpoints, this);
     setWindowTitle(QStringLiteral("多工位功能测试与追溯"));
     resize(1080, 740);
     setMinimumSize(860, 600);
@@ -86,7 +96,7 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
     }
     buildUi();
     buildNavigation();
-    for (const auto &ep : endpoints)
+    for (const auto &ep : configuredEndpoints)
         m_stations->updateStation({{"stationId", ep.stationId},
                                    {"online", false},
                                    {"execution", QStringLiteral("初始化中")},
@@ -157,7 +167,12 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
                 if (!ok)
                     m_detail->setText(QStringLiteral("后台不可用"));
             });
-    m_controller->initialize(dataDirectory, endpoints);
+    m_controller->initialize(dataDirectory, configuredEndpoints);
+    if (!connectionError.isEmpty())
+    {
+        m_stationConfigurationDialog->showError(connectionError);
+        QTimer::singleShot(0, this, [this] { openWindow(m_stationConfigurationDialog); });
+    }
 }
 
 MainWindow::~MainWindow()
@@ -174,6 +189,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 {
     m_historyDialog->close();
     m_logDialog->close();
+    m_stationConfigurationDialog->close();
     if (m_maintenanceDialog)
         m_maintenanceDialog->close();
     QMainWindow::closeEvent(event);
@@ -194,15 +210,21 @@ void MainWindow::buildNavigation()
     // 复用日志窗口及其持续更新的缓存。
     auto *logs = new QAction(QStringLiteral("运行日志"), this);
     logs->setObjectName("openLogAction");
+    // 单独配置各工位的IP和端口，不占用当前测试区域。
+    auto *connections = new QAction(QStringLiteral("工位配置"), this);
+    connections->setObjectName("openStationConfigurationAction");
     // 管理员维护与正常测试操作各自独立。
     auto *maintenance = new QAction(QStringLiteral("管理员维护"), this);
     maintenance->setObjectName("openMaintenanceAction");
     navigation->addAction(history);
     navigation->addAction(logs);
     navigation->addSeparator();
+    navigation->addAction(connections);
     navigation->addAction(maintenance);
     connect(history, &QAction::triggered, this, [this] { openWindow(m_historyDialog); });
     connect(logs, &QAction::triggered, this, [this] { openWindow(m_logDialog); });
+    connect(connections, &QAction::triggered, this,
+            [this] { openWindow(m_stationConfigurationDialog); });
     connect(maintenance, &QAction::triggered, this,
             [this]
             {

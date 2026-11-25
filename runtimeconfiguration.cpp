@@ -2,10 +2,13 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHostAddress>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
 #include <QSet>
+#include <QRegularExpression>
 #include <cmath>
 
 namespace
@@ -63,7 +66,139 @@ bool validSeconds(const QJsonValue &value)
     return value.isDouble() && std::isfinite(value.toDouble()) && value.toDouble() >= 1 &&
            value.toDouble() <= 86400 && value.toDouble() == std::floor(value.toDouble());
 }
+// 规范化连接地址，拒绝无效工位、端口和重复目标。
+bool normalizeEndpoints(QList<StationEndpoint> *endpoints, QString *error)
+{
+    if (endpoints->isEmpty() || endpoints->size() > 4)
+    {
+        if (error)
+            *error = QStringLiteral("工位数量须在1至4之间");
+        return false;
+    }
+    // 限制主机名的标签长度与字符，不执行阻塞的域名解析。
+    static const QRegularExpression hostname(
+        QStringLiteral("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+                       "(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\\.?$"));
+    // 识别看似IPv4但数值无效的输入，避免误当作域名。
+    static const QRegularExpression numericHost(QStringLiteral("^[0-9.]+$"));
+    // 记录已使用的目标地址与端口。
+    QSet<QString> targets;
+    for (int index = 0; index < endpoints->size(); ++index)
+    {
+        // 保存当前需规范化的连接。
+        auto &endpoint = (*endpoints)[index];
+        if (endpoint.stationId != index + 1 || endpoint.port == 0)
+        {
+            if (error)
+                *error = QStringLiteral("工位编号须从1连续排列，端口须在1至65535之间");
+            return false;
+        }
+        endpoint.host = endpoint.host.trimmed();
+        // 解析IPv4或IPv6地址，主机名另行校验。
+        QHostAddress address;
+        if (address.setAddress(endpoint.host))
+        {
+            if (address.isNull() || address.isMulticast() ||
+                address == QHostAddress(QHostAddress::AnyIPv4) ||
+                address == QHostAddress(QHostAddress::AnyIPv6))
+            {
+                if (error)
+                    *error =
+                        QStringLiteral("工位%1须填写可连接的单播IP地址").arg(endpoint.stationId);
+                return false;
+            }
+            // 将IPv4和IPv4映射地址统一，避免同一目标重复配置。
+            bool ipv4 = false;
+            // 保存地址可对应的IPv4数值。
+            const auto value = address.toIPv4Address(&ipv4);
+            endpoint.host = ipv4 ? QHostAddress(value).toString() : address.toString();
+        }
+        else
+        {
+            if (endpoint.host.size() > 253 || !hostname.match(endpoint.host).hasMatch() ||
+                numericHost.match(endpoint.host).hasMatch())
+            {
+                if (error)
+                    *error = QStringLiteral("工位%1的IP地址或主机名无效").arg(endpoint.stationId);
+                return false;
+            }
+            endpoint.host = endpoint.host.toLower();
+            if (endpoint.host.endsWith('.'))
+                endpoint.host.chop(1);
+        }
+        // 组合规范化后的目标，拒绝两个工位指向完全相同的服务。
+        const auto target = endpoint.host + ':' + QString::number(endpoint.port);
+        if (targets.contains(target))
+        {
+            if (error)
+                *error = QStringLiteral("工位%1的地址和端口与其他工位重复").arg(endpoint.stationId);
+            return false;
+        }
+        targets.insert(target);
+    }
+    return true;
+}
 } // namespace
+
+QList<StationEndpoint>
+RuntimeConfiguration::loadStationEndpoints(const QString &directory,
+                                           const QList<StationEndpoint> &fallback, QString *error)
+{
+    if (error)
+        error->clear();
+    // 定位只在本地数据目录保存的连接配置。
+    const auto path = QDir(directory).filePath("maintenance/station-connections.json");
+    if (!QFileInfo::exists(path))
+        return fallback;
+    // 保存已读取并待验证的设置对象。
+    QJsonObject object;
+    if (!readSettings(path, &object, error))
+        return {};
+    if (!object["stations"].isArray() || object["stations"].toArray().size() > 4)
+    {
+        if (error)
+            *error = QStringLiteral("工位连接配置格式无效");
+        return {};
+    }
+    // 收集通过字段类型和范围检查的工位连接。
+    QList<StationEndpoint> endpoints;
+    for (const auto &value : object["stations"].toArray())
+    {
+        // 读取当前工位的完整设置。
+        const auto station = value.toObject();
+        // 校验端口为可完整表示的整数，避免截断为其他端口。
+        const auto port = station["port"].toDouble();
+        if (!station["host"].isString() || !station["port"].isDouble() || !std::isfinite(port) ||
+            port < 1 || port > 65535 || port != std::floor(port))
+        {
+            if (error)
+                *error = QStringLiteral("工位连接配置的地址或端口无效");
+            return {};
+        }
+        endpoints.append({station["stationId"].toInt(), station["host"].toString(), quint16(port)});
+    }
+    return normalizeEndpoints(&endpoints, error) ? endpoints : QList<StationEndpoint>{};
+}
+
+bool RuntimeConfiguration::saveStationEndpoints(const QString &directory,
+                                                const QList<StationEndpoint> &endpoints,
+                                                QString *error)
+{
+    if (error)
+        error->clear();
+    // 在副本中规范化，保持正在执行的连接参数不变。
+    auto normalized = endpoints;
+    if (!normalizeEndpoints(&normalized, error))
+        return false;
+    // 保存各工位独立的地址与端口字段。
+    QJsonArray stations;
+    for (const auto &endpoint : normalized)
+        stations.append(QJsonObject{{"stationId", endpoint.stationId},
+                                    {"host", endpoint.host},
+                                    {"port", int(endpoint.port)}});
+    return writeSettings(QDir(directory).filePath("maintenance/station-connections.json"),
+                         {{"version", 1}, {"stations", stations}}, error);
+}
 
 RuntimeConfiguration::ExecutionLimits RuntimeConfiguration::loadLimits(const QString &directory,
                                                                        QString *error)

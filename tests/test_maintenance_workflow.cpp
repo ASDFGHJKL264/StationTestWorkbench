@@ -88,8 +88,10 @@ bool seedHistory(const QString &directory)
     // 从正式内置规则生成一次有效完成结果。
     const auto recipe = Domain::defaultRecipe();
     // 固定运行身份便于恢复后核对，内容不依赖数据库模式版本。
-    const QJsonObject run{{"runId", "maintenance-source-run"}, {"stationId", 1},
-                          {"sn", "MAINTENANCE-SN-001"}, {"recipeVersion", recipe["version"]},
+    const QJsonObject run{{"runId", "maintenance-source-run"},
+                          {"stationId", 1},
+                          {"sn", "MAINTENANCE-SN-001"},
+                          {"recipeVersion", recipe["version"]},
                           {"recipe", recipe}};
     // 按配方顺序收集有效测量值。
     QJsonArray values;
@@ -111,12 +113,15 @@ bool seedHistory(const QString &directory)
     repository.reserveRun(run);
     if (reserved.isEmpty() || !reserved.last()[1].toBool())
         return false;
-    repository.saveResult(QJsonObject{{"runId", run["runId"]}, {"stationId", 1},
-                                      {"sn", run["sn"]}, {"recipeVersion", run["recipeVersion"]},
-                                      {"outcome", "completed"}, {"steps", values}});
+    repository.saveResult(QJsonObject{{"runId", run["runId"]},
+                                      {"stationId", 1},
+                                      {"sn", run["sn"]},
+                                      {"recipeVersion", run["recipeVersion"]},
+                                      {"outcome", "completed"},
+                                      {"steps", values}});
     return !saved.isEmpty() && saved.last()[1].toBool();
 }
-}
+} // namespace
 
 class MaintenanceWorkflowTests final : public QObject
 {
@@ -160,7 +165,8 @@ class MaintenanceWorkflowTests final : public QObject
         QVERIFY(!resultForPath(restore, restoredPath)[1].toBool());
         // 逐个检查没有单独完成信号的维护请求也明确拒绝。
         int messageCount = messages.size();
-        controller.resolveException(1, "unavailable-run", QStringLiteral("设备已断电，申请人工处置"), true);
+        controller.resolveException(1, "unavailable-run",
+                                    QStringLiteral("设备已断电，申请人工处置"), true);
         QCOMPARE(messages.size(), ++messageCount);
         QVERIFY(messages.last()[1].toBool());
         controller.resumeStation(1, QStringLiteral("已确认设备完成复位"), true);
@@ -200,8 +206,8 @@ class MaintenanceWorkflowTests final : public QObject
         controller.initialize(original, {});
         QTRY_VERIFY(!ready.isEmpty());
         QVERIFY(ready.last()[0].toBool());
-        QTRY_VERIFY_WITH_TIMEOUT(automaticBackupCompleted(backup, QDir(original).filePath("backups")),
-                                 15000);
+        QTRY_VERIFY_WITH_TIMEOUT(
+            automaticBackupCompleted(backup, QDir(original).filePath("backups")), 15000);
         // 接收维护调用或配置检查的错误原因。
         QString error;
         // 固定演示凭据仅供临时测试，不能作为产品默认密码。
@@ -215,6 +221,10 @@ class MaintenanceWorkflowTests final : public QObject
         const auto limits = RuntimeConfiguration::loadLimits(original, &error);
         QCOMPARE(limits.runSeconds, 321);
         QCOMPARE(limits.stepSeconds, 37);
+        // 核对工位连接配置随恢复的数据目录一起迁移。
+        const QList<StationEndpoint> connections{{1, "192.0.2.10", 46501}};
+        QVERIFY2(RuntimeConfiguration::saveStationEndpoints(original, connections, &error),
+                 qPrintable(error));
         // 保留完整凭据摘要，以确认迁移没有重新生成管理员身份。
         const auto credentials = readBytes(QDir(original).filePath("maintenance/admin-auth.json"));
         QVERIFY(!credentials.isEmpty());
@@ -238,6 +248,8 @@ class MaintenanceWorkflowTests final : public QObject
         QCOMPARE(readBytes(QDir(restored).filePath("maintenance/admin-auth.json")), credentials);
         QCOMPARE(readBytes(QDir(restored).filePath("maintenance/runtime.json")),
                  readBytes(QDir(original).filePath("maintenance/runtime.json")));
+        QCOMPARE(readBytes(QDir(restored).filePath("maintenance/station-connections.json")),
+                 readBytes(QDir(original).filePath("maintenance/station-connections.json")));
         // 用恢复目录中的凭据真实登录，而非仅比较文件存在性。
         AdminAccess restoredAccess(QDir(restored).filePath("maintenance/admin-auth.json"));
         QVERIFY2(restoredAccess.login("maintenance-admin", password, &error), qPrintable(error));
@@ -253,7 +265,8 @@ class MaintenanceWorkflowTests final : public QObject
         QCOMPARE(QFileInfo(restarted.first()[0].toString()).canonicalFilePath(),
                  QFileInfo(restored).canonicalFilePath());
         error.clear();
-        QCOMPARE(QFileInfo(RuntimeConfiguration::resolveDataDirectory(original, &error)).canonicalFilePath(),
+        QCOMPARE(QFileInfo(RuntimeConfiguration::resolveDataDirectory(original, &error))
+                     .canonicalFilePath(),
                  QFileInfo(restored).canonicalFilePath());
         QVERIFY2(error.isEmpty(), qPrintable(error));
         controller.shutdown();
@@ -291,7 +304,8 @@ class MaintenanceWorkflowTests final : public QObject
         AdminAccess originalAccess(QDir(original).filePath("maintenance/admin-auth.json"));
         // 接收认证及运行配置保存失败原因。
         QString error;
-        QVERIFY2(originalAccess.configure("recovery-admin", password, password, &error), qPrintable(error));
+        QVERIFY2(originalAccess.configure("recovery-admin", password, password, &error),
+                 qPrintable(error));
         originalAccess.logout();
         QVERIFY(RuntimeConfiguration::saveLimits(original, {600, 45}, &error));
         // 用固定无效文件模拟无法被 SQLite 打开的原库。
@@ -309,7 +323,8 @@ class MaintenanceWorkflowTests final : public QObject
         QVERIFY(!ready.last()[0].toBool());
         QVERIFY(controller.adminConfigured());
         QVERIFY(!controller.adminAuthorized());
-        QVERIFY2(controller.loginAdministrator("recovery-admin", password, &error), qPrintable(error));
+        QVERIFY2(controller.loginAdministrator("recovery-admin", password, &error),
+                 qPrintable(error));
         controller.validateDatabaseBackup(backupPath);
         QTRY_VERIFY_WITH_TIMEOUT(!resultForPath(validation, backupPath).isEmpty(), 15000);
         QVERIFY2(resultForPath(validation, backupPath)[1].toBool(),
@@ -330,14 +345,17 @@ class MaintenanceWorkflowTests final : public QObject
         controller.activateRestoredDatabase(restored);
         QTRY_COMPARE_WITH_TIMEOUT(restarted.size(), 1, 5000);
         // 原库损坏时，恢复来源仍须由新目录保存操作者和来源身份。
-        const auto provenance = QJsonDocument::fromJson(
-            readBytes(QDir(restored).filePath("maintenance/restored-from.json"))).object();
+        const auto provenance =
+            QJsonDocument::fromJson(
+                readBytes(QDir(restored).filePath("maintenance/restored-from.json")))
+                .object();
         QCOMPARE(provenance["actor"].toString(), QString("recovery-admin"));
         QCOMPARE(QFileInfo(provenance["sourceDirectory"].toString()).canonicalFilePath(),
                  QFileInfo(original).canonicalFilePath());
         QVERIFY(!QJsonDocument(provenance).toJson().contains(password.toUtf8()));
         error.clear();
-        QCOMPARE(QFileInfo(RuntimeConfiguration::resolveDataDirectory(original, &error)).canonicalFilePath(),
+        QCOMPARE(QFileInfo(RuntimeConfiguration::resolveDataDirectory(original, &error))
+                     .canonicalFilePath(),
                  QFileInfo(restored).canonicalFilePath());
         QVERIFY2(error.isEmpty(), qPrintable(error));
         controller.shutdown();
@@ -349,12 +367,101 @@ class MaintenanceWorkflowTests final : public QObject
         recovered.initialize(restored, {});
         QTRY_VERIFY(!recoveredReady.isEmpty());
         QVERIFY2(recoveredReady.last()[0].toBool(), "Restored database failed to initialize");
-        QVERIFY2(recovered.loginAdministrator("recovery-admin", password, &error), qPrintable(error));
+        QVERIFY2(recovered.loginAdministrator("recovery-admin", password, &error),
+                 qPrintable(error));
         recovered.shutdown();
         QVERIFY(databaseText(QDir(restored).filePath("data/workbench.db"),
                              "SELECT reason FROM operational_events WHERE "
                              "action='RESTORED_DATABASE_OPENED' ORDER BY id DESC LIMIT 1")
                     .contains("recovery-admin"));
+    }
+
+    // 验证连接配置重读、地址规范化及非法保存不破坏原配置。
+    void stationConnectionsPersistAndRejectInvalidEdits()
+    {
+        // 隔离当前连接配置及无效输入产生的文件。
+        QTemporaryDir directory;
+        // 模拟桌面启动参数提供的初始地址。
+        const QList<StationEndpoint> fallback{{1, "127.0.0.1", 46501}};
+        // 接收连接配置验证错误。
+        QString error;
+        QCOMPARE(RuntimeConfiguration::loadStationEndpoints(directory.path(), fallback, &error)
+                     .first()
+                     .port,
+                 quint16(46501));
+        QVERIFY(error.isEmpty());
+        // 使用三个不同目标验证IPv4、IPv6和主机名。
+        const QList<StationEndpoint> requested{
+            {1, " 192.0.2.10 ", 1}, {2, "2001:db8::2", 65535}, {3, "STATION-3.Example.", 46503}};
+        QVERIFY2(RuntimeConfiguration::saveStationEndpoints(directory.path(), requested, &error),
+                 qPrintable(error));
+        // 验证已保存的配置优先于启动参数。
+        const auto loaded =
+            RuntimeConfiguration::loadStationEndpoints(directory.path(), fallback, &error);
+        QCOMPARE(loaded.size(), 3);
+        QCOMPARE(loaded[0].host, QString("192.0.2.10"));
+        QCOMPARE(loaded[0].port, quint16(1));
+        QCOMPARE(loaded[1].host, QString("2001:db8::2"));
+        QCOMPARE(loaded[1].port, quint16(65535));
+        QCOMPARE(loaded[2].host, QString("station-3.example"));
+        // 记录有效文件，所有失败保存都必须保留这些内容。
+        const auto path = directory.filePath("maintenance/station-connections.json");
+        // 保留可用配置的完整字节以核对原子写入边界。
+        const auto original = readBytes(path);
+        for (const auto &invalid : QList<QList<StationEndpoint>>{
+                 {},
+                 {{1, "", 46501}},
+                 {{1, "999.1.1.1", 46501}},
+                 {{1, "http://127.0.0.1", 46501}},
+                 {{1, "0.0.0.0", 46501}},
+                 {{1, "127.0.0.1", 0}},
+                 {{2, "127.0.0.1", 46501}},
+                 {{1, "127.0.0.1", 46501}, {2, "::ffff:127.0.0.1", 46501}},
+                 {{1, "Station.Example.", 46501}, {2, "station.example", 46501}}})
+        {
+            QVERIFY(!RuntimeConfiguration::saveStationEndpoints(directory.path(), invalid, &error));
+            QVERIFY(!error.isEmpty());
+            QCOMPARE(readBytes(path), original);
+        }
+        // 模拟数据目录路径被普通文件占用，确认保存失败可以反馈。
+        const auto blocked = directory.filePath("blocked");
+        QVERIFY(writeBytes(blocked, "existing file"));
+        QVERIFY(!RuntimeConfiguration::saveStationEndpoints(blocked, requested, &error));
+        QVERIFY(!error.isEmpty());
+    }
+
+    // 验证损坏、未来版本和端口类型错误不会悄悄连接启动参数中的其他设备。
+    void brokenStationConnectionsNeverFallBackToAnotherTarget()
+    {
+        // 保存本次故障注入产生的设置文件。
+        QTemporaryDir directory;
+        // 提供不应在配置损坏时自动启用的连接。
+        const QList<StationEndpoint> fallback{{1, "127.0.0.1", 46501}};
+        // 定位需要注入无效内容的连接配置。
+        const auto path = directory.filePath("maintenance/station-connections.json");
+        // 接收每种坏配置的拒绝原因。
+        QString error;
+        for (const auto &bytes :
+             {QByteArray("not json"), QByteArray("{\"version\":2,\"stations\":[]}"),
+              QByteArray("{\"version\":1,\"stations\":[]}"), QByteArray(65537, 'x')})
+        {
+            QVERIFY(writeBytes(path, bytes));
+            QVERIFY(RuntimeConfiguration::loadStationEndpoints(directory.path(), fallback, &error)
+                        .isEmpty());
+            QVERIFY(!error.isEmpty());
+        }
+        for (const auto &port : QJsonArray{0, -1, 65536, 1.5, "46501"})
+        {
+            // 构造格式合法但端口取值无效的文件。
+            const QJsonObject object{
+                {"version", 1},
+                {"stations",
+                 QJsonArray{QJsonObject{{"stationId", 1}, {"host", "127.0.0.1"}, {"port", port}}}}};
+            QVERIFY(writeBytes(path, QJsonDocument(object).toJson()));
+            QVERIFY(RuntimeConfiguration::loadStationEndpoints(directory.path(), fallback, &error)
+                        .isEmpty());
+            QVERIFY(!error.isEmpty());
+        }
     }
 
     // 验证期限范围、损坏配置默认值，以及恢复目录的存在性和循环保护。
@@ -377,8 +484,8 @@ class MaintenanceWorkflowTests final : public QObject
         const auto settingsPath = directory.filePath("maintenance/runtime.json");
         // 保留有效配置的字节快照。
         const auto validSettings = readBytes(settingsPath);
-        for (const auto &limits : QList<RuntimeConfiguration::ExecutionLimits>{{0, 1}, {86401, 1},
-                                                                             {20, 21}, {20, 0}})
+        for (const auto &limits :
+             QList<RuntimeConfiguration::ExecutionLimits>{{0, 1}, {86401, 1}, {20, 21}, {20, 0}})
         {
             error.clear();
             QVERIFY(!RuntimeConfiguration::saveLimits(directory.path(), limits, &error));
@@ -394,7 +501,9 @@ class MaintenanceWorkflowTests final : public QObject
         QVERIFY(!error.isEmpty());
         QCOMPARE(readBytes(settingsPath), QByteArray("{broken runtime settings"));
         QVERIFY(writeBytes(settingsPath, QJsonDocument(QJsonObject{{"version", 1},
-                            {"runTimeoutSeconds", 30.5}, {"stepTimeoutSeconds", 5}}).toJson()));
+                                                                   {"runTimeoutSeconds", 30.5},
+                                                                   {"stepTimeoutSeconds", 5}})
+                                             .toJson()));
         error.clear();
         QCOMPARE(RuntimeConfiguration::loadLimits(directory.path(), &error).runSeconds, 120);
         QVERIFY(!error.isEmpty());
@@ -409,13 +518,17 @@ class MaintenanceWorkflowTests final : public QObject
         QVERIFY(QDir().mkpath(empty));
         QVERIFY(!RuntimeConfiguration::activateDataDirectory(first, first, &error));
         QVERIFY(!RuntimeConfiguration::activateDataDirectory(first, empty, &error));
-        QVERIFY(!RuntimeConfiguration::activateDataDirectory(first, directory.filePath("missing"), &error));
+        QVERIFY(!RuntimeConfiguration::activateDataDirectory(first, directory.filePath("missing"),
+                                                             &error));
         error.clear();
-        QVERIFY2(RuntimeConfiguration::activateDataDirectory(first, second, &error), qPrintable(error));
-        QCOMPARE(QFileInfo(RuntimeConfiguration::resolveDataDirectory(first, &error)).canonicalFilePath(),
+        QVERIFY2(RuntimeConfiguration::activateDataDirectory(first, second, &error),
+                 qPrintable(error));
+        QCOMPARE(QFileInfo(RuntimeConfiguration::resolveDataDirectory(first, &error))
+                     .canonicalFilePath(),
                  QFileInfo(second).canonicalFilePath());
         // 手写第二条指向形成环，验证启动时不会无限跟随。
-        const QJsonObject loop{{"version", 1}, {"activeDataDirectory", QFileInfo(first).canonicalFilePath()}};
+        const QJsonObject loop{{"version", 1},
+                               {"activeDataDirectory", QFileInfo(first).canonicalFilePath()}};
         QVERIFY(writeBytes(QDir(second).filePath("maintenance/active-data-dir.json"),
                            QJsonDocument(loop).toJson()));
         error.clear();

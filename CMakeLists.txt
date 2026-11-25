@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(StationTestWorkbench VERSION 0.3.2 LANGUAGES CXX)
+project(StationTestWorkbench VERSION 0.4.0 LANGUAGES CXX)
 # 指定项目源码使用的 C++ 语言标准。
 set(CMAKE_CXX_STANDARD 17)
 # 要求编译器严格支持所选 C++ 标准。
@@ -62,6 +62,7 @@ qt_add_library(WorkbenchWidgets STATIC
     logdialog.h logdialog.cpp
     models.h models.cpp
     maintenancedialog.h maintenancedialog.cpp
+    stationconfigurationdialog.h stationconfigurationdialog.cpp
     toolstyle.h)
 target_link_libraries(WorkbenchWidgets PUBLIC WorkbenchRuntime Qt6::Widgets)
 

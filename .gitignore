@@ -35,6 +35,7 @@ id_rsa*
 id_ecdsa*
 id_ed25519*
 admin-auth.json
+station-connections.json
 active-data-dir.json
 restored-from.json
 **/maintenance/runtime.json

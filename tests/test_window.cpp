@@ -4,6 +4,7 @@
 #include "domain.h"
 #include "toolstyle.h"
 #include "maintenancedialog.h"
+#include "stationconfigurationdialog.h"
 #include <QAction>
 #include <QSpinBox>
 #include <QFileInfo>
@@ -257,7 +258,11 @@ class WindowTests final : public QObject
         QCOMPARE(openWindow(window, "openLogAction", "logDialog"), logs);
         // 定位管理员入口打开的维护中心。
         auto *maintenance = openWindow(window, "openMaintenanceAction", "maintenanceDialog");
+        // 检查工位配置窗口也随主窗口关闭。
+        auto *connections =
+            openWindow(window, "openStationConfigurationAction", "stationConfigurationDialog");
         QVERIFY(maintenance);
+        QVERIFY(connections);
         QVERIFY(history->isVisible() && logs->isVisible() && maintenance->isVisible());
         history->close();
         logs->close();
@@ -270,6 +275,94 @@ class WindowTests final : public QObject
         QVERIFY(!history->isVisible());
         QVERIFY(!logs->isVisible());
         QVERIFY(!maintenance->isVisible());
+        QVERIFY(!connections->isVisible());
+    }
+
+    // 验证配置窗口整体校验、保存、本机重读及关闭复用。
+    void stationConfigurationWindowValidatesAndPersists()
+    {
+        // 隔离配置文件和当前工作台的业务数据。
+        QTemporaryDir directory;
+        // 创建两个初始本机工位，保存配置不会立即连接新地址。
+        MainWindow window(directory.path(), {{1, "127.0.0.1", 49531}, {2, "127.0.0.1", 49532}});
+        window.show();
+        // 通过顶栏入口打开新窗口。
+        auto *dialog =
+            openWindow(window, "openStationConfigurationAction", "stationConfigurationDialog");
+        QVERIFY(dialog && dialog->isWindow() && !dialog->isModal());
+        // 编辑第一个工位的地址。
+        auto *firstHost = dialog->findChild<QLineEdit *>("stationHost1");
+        // 编辑第二个工位的地址。
+        auto *secondHost = dialog->findChild<QLineEdit *>("stationHost2");
+        // 编辑第一个工位的端口。
+        auto *firstPort = dialog->findChild<QSpinBox *>("stationPort1");
+        // 编辑第二个工位的端口。
+        auto *secondPort = dialog->findChild<QSpinBox *>("stationPort2");
+        // 提交整组连接配置。
+        auto *save = dialog->findChild<QPushButton *>("saveStationConfigurationButton");
+        // 显示校验失败和保存后的实际提示。
+        auto *status = dialog->findChild<QLabel *>("stationConfigurationStatus");
+        QVERIFY(firstHost && secondHost && firstPort && secondPort && save && status);
+        QCOMPARE(firstHost->text(), QString("127.0.0.1"));
+        QCOMPARE(secondPort->value(), 49532);
+        firstHost->clear();
+        QTest::mouseClick(save, Qt::LeftButton);
+        QVERIFY(!QFileInfo::exists(directory.filePath("maintenance/station-connections.json")));
+        QVERIFY(status->isVisible() && status->text().contains(QStringLiteral("无效")));
+        firstHost->setText("192.0.2.11");
+        secondHost->setText("192.0.2.11");
+        secondPort->setValue(firstPort->value());
+        QTest::mouseClick(save, Qt::LeftButton);
+        QVERIFY(status->text().contains(QStringLiteral("重复")));
+        QVERIFY(!QFileInfo::exists(directory.filePath("maintenance/station-connections.json")));
+        secondHost->setText("2001:db8::2");
+        firstPort->setValue(65535);
+        QTest::mouseClick(save, Qt::LeftButton);
+        // 重新从磁盘读取，证明成功提示对应完整持久化配置。
+        QString error;
+        // 检查每行不同的IP和端口没有被合并或截断。
+        const auto loaded =
+            RuntimeConfiguration::loadStationEndpoints(directory.path(), {}, &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QCOMPARE(loaded.size(), 2);
+        QCOMPARE(loaded[0].host, QString("192.0.2.11"));
+        QCOMPARE(loaded[0].port, quint16(65535));
+        QCOMPARE(loaded[1].host, QString("2001:db8::2"));
+        QVERIFY(status->text().contains(QStringLiteral("重新启动")));
+        QVERIFY(saveWindowEvidence(dialog, "station-configuration.png"));
+        dialog->close();
+        QCOMPARE(openWindow(window, "openStationConfigurationAction", "stationConfigurationDialog"),
+                 dialog);
+        QCOMPARE(firstHost->text(), QString("192.0.2.11"));
+    }
+
+    // 验证损坏配置在连接前被隔离，用户可以直接在窗口中修复。
+    void damagedStationConfigurationOpensRepairWindow()
+    {
+        // 隔离损坏设置及修复后的文件。
+        QTemporaryDir directory;
+        QVERIFY(QDir().mkpath(directory.filePath("maintenance")));
+        // 写入无法解析的本地连接配置。
+        QFile file(directory.filePath("maintenance/station-connections.json"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("broken");
+        file.close();
+        // 正常初始端口也不能在坏配置下被自动接入。
+        MainWindow window(directory.path(), {{1, "127.0.0.1", 49531}});
+        window.show();
+        // 修复窗口应在启动后自动出现。
+        auto *dialog = window.findChild<StationConfigurationDialog *>();
+        QVERIFY(dialog);
+        QTRY_VERIFY(dialog->isVisible());
+        QCOMPARE(window.findChild<QTableView *>("stationView")->model()->rowCount(), 0);
+        QVERIFY(!dialog->findChild<QLabel *>("stationConfigurationStatus")->text().isEmpty());
+        QTest::mouseClick(dialog->findChild<QPushButton *>("saveStationConfigurationButton"),
+                          Qt::LeftButton);
+        // 保存有效值后允许下次启动重新接入。
+        QString error;
+        QCOMPARE(RuntimeConfiguration::loadStationEndpoints(directory.path(), {}, &error).size(),
+                 1);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
     }
 
     // 提供浅转深和深转浅两种系统配色切换场景。
@@ -297,7 +390,10 @@ class WindowTests final : public QObject
         auto *historyDialog = openWindow(window, "openHistoryAction", "historyDialog");
         // 打开运行日志窗口，验证日志与主窗分别显示。
         auto *logDialog = openWindow(window, "openLogAction", "logDialog");
-        QVERIFY(historyDialog && logDialog);
+        // 打开工位配置，检查其地址输入和端口编辑的主题可读性。
+        auto *configurationDialog =
+            openWindow(window, "openStationConfigurationAction", "stationConfigurationDialog");
+        QVERIFY(historyDialog && logDialog && configurationDialog);
         // 输入或筛选本次验证使用的产品序列号。
         auto *sn = window.findChild<QLineEdit *>("snInput");
         // 输入历史记录的完整 SN 筛选条件。
@@ -341,10 +437,30 @@ class WindowTests final : public QObject
                 QString("history-%1-%2.png").arg(QTest::currentDataTag()).arg(phase)));
             QVERIFY(saveWindowEvidence(
                 logDialog, QString("logs-%1-%2.png").arg(QTest::currentDataTag()).arg(phase)));
+            QVERIFY(saveWindowEvidence(
+                configurationDialog,
+                QString("connections-%1-%2.png").arg(QTest::currentDataTag()).arg(phase)));
             for (auto *widget :
-                 QList<QWidget *>{&window, sn, filter, recipe, start, query, from, through,
-                                  stationFilter, verdictFilter, reconcile, stations, steps, history,
-                                  historyDialog, logDialog, logs})
+                 QList<QWidget *>{&window,
+                                  sn,
+                                  filter,
+                                  recipe,
+                                  start,
+                                  query,
+                                  from,
+                                  through,
+                                  stationFilter,
+                                  verdictFilter,
+                                  reconcile,
+                                  stations,
+                                  steps,
+                                  history,
+                                  historyDialog,
+                                  logDialog,
+                                  logs,
+                                  configurationDialog,
+                                  configurationDialog->findChild<QLineEdit *>("stationHost1"),
+                                  configurationDialog->findChild<QSpinBox *>("stationPort1")})
             {
                 // 保存待设置或检查的应用及控件调色板。
                 const auto palette = widget->palette();

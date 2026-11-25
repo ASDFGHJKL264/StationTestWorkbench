@@ -24,9 +24,9 @@ bool copyMaintenanceSettings(const QString &source, const QString &target, QStri
         *error = QStringLiteral("无法创建恢复目录的维护设置");
         return false;
     }
-    for (const auto &name : {"admin-auth.json", "runtime.json"})
+    for (const auto &name : {"admin-auth.json", "runtime.json", "station-connections.json"})
     {
-        // 打开已有管理员配置或运行期限配置。
+        // 打开已有管理员、运行期限或工位连接配置。
         QFile input(QDir(source).filePath(QStringLiteral("maintenance/") + name));
         if (QString::fromLatin1(name) == "admin-auth.json" &&
             (!QFileInfo(input).isFile() || QFileInfo(input).isSymLink()))
