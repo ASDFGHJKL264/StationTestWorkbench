@@ -30,7 +30,7 @@ int main(int argc, char **argv)
     parser.addHelpOption();
     parser.addVersionOption();
     parser.addOption({"data-dir", QStringLiteral("数据根目录"), "directory",
-                      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)});
+                      QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation)});
     parser.addOption({"host", QStringLiteral("工位主机"), "host", "127.0.0.1"});
     parser.addOption({"base-port", QStringLiteral("工位1端口，后续依次递增"), "port", "46501"});
     parser.addOption({"stations", QStringLiteral("工位数量1至4"), "count", "4"});

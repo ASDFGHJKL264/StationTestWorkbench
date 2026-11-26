@@ -20,12 +20,15 @@
 $ErrorActionPreference='Stop'
 # 由脚本位置推导出的项目根目录。
 $projectRoot=Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'data-paths.ps1')
 if(!$ProgramDirectory) {
     if(Test-Path -LiteralPath (Join-Path $projectRoot 'StationTestWorkbench.exe')) {$ProgramDirectory=$projectRoot}
     else {$ProgramDirectory=Join-Path $projectRoot 'build/quality'}
 }
 $ProgramDirectory=(Resolve-Path -LiteralPath $ProgramDirectory).Path
-if(!$DataDirectory) {$DataDirectory=Join-Path $projectRoot 'demo-data/client'}
+# 显式目录保持原语义，默认目录统一使用固定的用户本地数据位置。
+$dataPaths=Get-WorkbenchDataPaths -DataDirectory $DataDirectory
+$DataDirectory=$dataPaths.Client
 # 待启动的工作台程序路径或进程对象。
 $client=Join-Path $ProgramDirectory 'StationTestWorkbench.exe'
 if(!(Test-Path -LiteralPath $client)) {throw 'Build the project or use the portable package first.'}

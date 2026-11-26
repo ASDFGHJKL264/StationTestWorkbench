@@ -2,6 +2,7 @@
 #include <QtTest>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -85,6 +86,61 @@ class AdminAccessTests final : public QObject
         QVERIFY(reloaded.actor().isEmpty());
         QVERIFY(!reloaded.configure("replacement", examplePassword(), examplePassword(), &error));
         QCOMPARE(readFile(path), contents);
+    }
+
+    // 验证管理员保存在独立用户目录，删除旧程序版本后仍可登录且不会重建旧目录。
+    void deletingOldProgramDirectoryPreservesAdministratorInStableUserData()
+    {
+        // 隔离模拟安装目录和用户数据，清理范围只限本次临时目录。
+        QTemporaryDir directory;
+        QVERIFY(directory.isValid());
+        // 模拟可以随升级删除的旧程序目录。
+        const auto versionDirectory = directory.filePath("StationTestWorkbench-0.3.1-win64");
+        QVERIFY(QDir().mkpath(versionDirectory));
+        QVERIFY(writeFile(QDir(versionDirectory).filePath("StationTestWorkbench.exe"),
+                          "old-version-placeholder"));
+        // 模拟不随安装版本变化的本机用户数据目录。
+        const auto userDataDirectory = directory.filePath("Local/QtPortfolio/StationTestWorkbench");
+        // 管理员凭据只允许写在稳定数据目录中。
+        const auto credentialPath =
+            QDir(userDataDirectory).filePath("maintenance/admin-auth.json");
+        // 保留历史部署错误使用的路径，确认注册和登录均不会写入这里。
+        const auto oldCredentialPath =
+            QDir(versionDirectory).filePath("demo-data/client/maintenance/admin-auth.json");
+        // 收集首次设置和重新登录的失败原因。
+        QString error;
+        {
+            // 模拟第一次启动时设置管理员。
+            AdminAccess access(credentialPath);
+            QVERIFY2(access.configure("line-admin", examplePassword(), examplePassword(), &error),
+                     qPrintable(error));
+            QVERIFY(access.isConfigured());
+            QVERIFY(access.isAuthorized());
+        }
+        QVERIFY(QFileInfo::exists(credentialPath));
+        QVERIFY(!QFileInfo::exists(oldCredentialPath));
+        QCOMPARE(QDir(versionDirectory).entryList(QDir::AllEntries | QDir::NoDotAndDotDot),
+                 QStringList{"StationTestWorkbench.exe"});
+        // 保存首次设置的摘要文件，验证升级删除操作不会更换管理员身份。
+        const auto credentials = readFile(credentialPath);
+        QVERIFY(!credentials.isEmpty());
+        QVERIFY(!credentials.contains(examplePassword().toUtf8()));
+        // 在递归清理前确认真实目标位于本次临时目录内。
+        const auto temporaryRoot = QFileInfo(directory.path()).canonicalFilePath() + '/';
+        QVERIFY(QFileInfo(versionDirectory).canonicalFilePath().startsWith(temporaryRoot,
+                                                                         Qt::CaseInsensitive));
+        QVERIFY(QDir(versionDirectory).removeRecursively());
+        QVERIFY(!QFileInfo::exists(versionDirectory));
+        // 模拟删去旧安装后重开软件，凭据仍从稳定数据目录读取。
+        AdminAccess reloaded(credentialPath);
+        QVERIFY(reloaded.isConfigured());
+        QVERIFY(!reloaded.isAuthorized());
+        QVERIFY2(reloaded.login("line-admin", examplePassword(), &error), qPrintable(error));
+        QVERIFY(reloaded.isAuthorized());
+        QCOMPARE(reloaded.actor(), QString("line-admin"));
+        QCOMPARE(readFile(credentialPath), credentials);
+        QVERIFY(!QFileInfo::exists(versionDirectory));
+        QVERIFY(!QFileInfo::exists(oldCredentialPath));
     }
 
     // 验证错误密码和用户名不会保留权限，连续尝试受到冷却限制。

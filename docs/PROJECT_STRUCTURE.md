@@ -90,4 +90,4 @@ flowchart TD
 - 工作台 `scripts/verify.ps1 -WithSimulator` 执行可选联调，默认寻找同级模拟器，也可传入 `-SimulatorSourceDirectory`。
 - 源码中的可选联合演示通过 `-SimulatorProgramDirectory` 支持其他程序位置。
 
-源码目录调整不迁移运行数据。主程序继续使用原客户端数据目录，旧工位状态仍留在原位置。构建目录、IDE本地设置、密钥、数据库和发布包不进入源码提交。
+主程序和启动脚本默认使用固定的 Qt AppLocalDataLocation，模拟器桌面入口使用其 simulator 子目录。scripts/data-paths.ps1 统一脚本默认路径，scripts/install-portable.ps1 核验并迁移旧版数据、更新两个桌面入口；原文件保留。显式自定义数据目录继续有效。构建目录、IDE本地设置、密钥、数据库和发布包不进入源码提交。

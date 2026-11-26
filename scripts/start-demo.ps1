@@ -24,11 +24,14 @@
 $ErrorActionPreference='Stop'
 # 由脚本位置推导出的项目根目录。
 $projectRoot=Split-Path $PSScriptRoot -Parent
+. (Join-Path $PSScriptRoot 'data-paths.ps1')
 if(!$ProgramDirectory) {
     if(Test-Path -LiteralPath (Join-Path $projectRoot 'StationTestWorkbench.exe')) {$ProgramDirectory=$projectRoot}
     else {$ProgramDirectory=Join-Path $projectRoot 'build/quality'}
 }
-if(!$DataDirectory) {$DataDirectory=Join-Path $projectRoot 'demo-data'}
+# 默认路径与主程序一致；显式演示目录继续保持根目录和 client 子目录的布局。
+$dataPaths=Get-WorkbenchDataPaths -DataDirectory $DataDirectory -JointDemo
+$DataDirectory=$dataPaths.Simulator
 if(!$SimulatorProgramDirectory) {
     # 同级独立模拟器项目的根目录。
     $simulatorRoot=Join-Path (Split-Path $projectRoot -Parent) 'StationSimulator'
@@ -69,7 +72,7 @@ try {
     }
     Start-Sleep -Milliseconds 400
     foreach($process in $ownedProcesses) {if($process.HasExited) {throw 'A simulator failed to start; check port conflicts and simulator state.'}}
-    $arguments=@('--base-port',"$BasePort",'--stations',"$Stations",'--data-dir',('"{0}"' -f (Join-Path $DataDirectory 'client')))
+    $arguments=@('--base-port',"$BasePort",'--stations',"$Stations",'--data-dir',('"{0}"' -f $dataPaths.Client))
     # 根据交互运行或自动验证选择的窗口显示方式。
     $windowStyle='Normal'
     if($SmokeExitMs -gt 0) {$arguments+=@('--smoke-exit-ms',"$SmokeExitMs");$windowStyle='Hidden'}

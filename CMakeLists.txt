@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(StationTestWorkbench VERSION 0.4.0 LANGUAGES CXX)
+project(StationTestWorkbench VERSION 0.4.1 LANGUAGES CXX)
 # 指定项目源码使用的 C++ 语言标准。
 set(CMAKE_CXX_STANDARD 17)
 # 要求编译器严格支持所选 C++ 标准。
@@ -98,6 +98,14 @@ if(BUILD_TESTING)
     workbench_test(AdminAccessTests test_adminaccess.cpp WorkbenchRuntime)
     workbench_test(DatabaseMaintenanceTests test_database_maintenance.cpp WorkbenchRuntime)
     workbench_test(MaintenanceWorkflowTests test_maintenance_workflow.cpp WorkbenchRuntime)
+    if(WIN32)
+        add_test(NAME LauncherPathTests COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_launcher_paths.ps1")
+        set_tests_properties(LauncherPathTests PROPERTIES TIMEOUT 30)
+        add_test(NAME InstallMigrationTests COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_install_migration.ps1")
+        set_tests_properties(InstallMigrationTests PROPERTIES TIMEOUT 30)
+    endif()
 
     # 收集需要配置无显示器图形平台的界面测试目标。
     set(workbench_gui_tests ModelTests WindowTests)

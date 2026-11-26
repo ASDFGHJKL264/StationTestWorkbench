@@ -221,3 +221,11 @@ Debug主程序重新编译通过，以实际Windows图形平台、独立临时�
 重新构建主程序及三个相关测试目标，WindowTests 12项、WindowSimulatorTests 5项、MaintenanceWorkflowTests 8项，共25项检查通过，0失败、0跳过，CTest耗时9.98秒。真实TCP用例在原工位执行测试期间保存替代端口，验证原测试PASS并归档；停止原工位后，用同一数据目录和原启动参数重开工作台，确认连接新端口并取得替代工位的预设FAIL。另验证文件重读、IPv4/IPv6/主机名规范化、重复和空地址拒绝、端口溢出和类型错误、损坏和未来版本隔离、写入失败及恢复配置保留。
 
 实际Windows平台另有8项界面检查通过，包括新窗口校验和保存、坏配置修复、关窗复用及主窗关闭、深浅主题双向切换。人工检查主窗口与配置窗口截图，输入框、端口编辑和保存结果清晰；截图和原始日志位于本机 `build/v040-windows/`。本轮未重复执行未修改的协议、批量归档和性能基准。
+
+## 0.4.1 用户数据不再依赖旧版安装目录（2026-11-27）
+
+问题来自桌面入口遗留的 `--data-dir`，其值仍指向0.3.1安装目录；启动时会创建该目录，管理员注册又在其中创建maintenance。主程序默认改用AppLocalDataLocation；桌面入口移除旧目录参数，启动脚本由data-paths.ps1统一使用 `%LOCALAPPDATA%\QtPortfolio\StationTestWorkbench`，设备状态默认保存在其simulator子目录。显式自定义路径和联合演示自定义根/client布局继续有效。
+
+新增install-portable.ps1用于安装和可选迁移：复制当前有效数据目录，解析已激活恢复指向，独占源锁文件，逐文件核对哈希，已有目标禁止覆盖，保留原文件及旧快捷方式。主程序和模拟器均停止后才允许迁移，两个桌面入口同步消除旧版路径。管理员凭据仅在本机复制，不输出内容或摘要，也不放入发布包。
+
+AdminAccessTests新增删除旧程序目录后凭据不变、原密码重新登录且不重建旧目录的回归；该组9项、WindowTests 12项和MaintenanceWorkflowTests 8项共29项QtTest检查通过。LauncherPathTests验证实际启动脚本生成的默认和显式路径参数；InstallMigrationTests验证源锁拒绝、完整核验复制、原文件保留、已有目标拒绝及恢复指向与循环保护。两组PowerShell检查通过。Windows PowerShell模块从自身安装路径加载，避免继承另一版本模块路径导致哈希命令无法自动加载。本轮未重新测量性能基准。

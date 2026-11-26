@@ -64,7 +64,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $projectRoot $name) -Destination $package -Force
     }
     [void][IO.Directory]::CreateDirectory((Join-Path $package 'scripts'))
-    foreach($name in @('start-client.ps1')) {
+    foreach($name in @('start-client.ps1','data-paths.ps1','install-portable.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $package 'scripts') -Force
     }
     # 记录发布版本、源码提交及主程序哈希的清单对象。

@@ -12,6 +12,8 @@
 
 双击 `启动主程序.cmd`，只打开操作员主程序。默认连接本机 46501～46504 端口；未启动模拟器时显示离线，随后启动工位会自动尝试连接。
 
+桌面入口、裸程序和启动脚本默认使用固定目录 `%LOCALAPPDATA%\QtPortfolio\StationTestWorkbench` 保存数据库、管理员及工位配置，联合演示的设备状态在其中的 `simulator` 子目录。数据目录与程序版本分开，删除旧版安装文件夹不会清除管理员，也不会再创建旧版目录。显式指定 `--data-dir` 或 `-DataDirectory` 时继续使用指定位置。
+
 模拟器在另一工程中编译并通过其 `启动模拟器.cmd` 独立启动，点击“启动全部”开始监听。也可直接运行 `StationSimulator.exe`，详细配置见模拟器工程 README。两个程序分别关闭。
 
 在工位表选择一个工位，输入产品 SN 和配方，点击“开始测试”。步骤逐项更新；测试完成后分别显示质量判定、归档提交和工位确认。取消操作等待工位返回真实终态。
@@ -62,10 +64,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -Si
 在 Qt Creator 中打开根目录 `CMakeLists.txt`，选择 Qt 6 MinGW 64位套件。主程序需要 Core、Network、Sql、Widgets，测试额外需要 Qt Test。
 
 ```powershell
-# 独立构建及10组测试，不要求模拟器源码存在：
+# Windows独立构建及12组测试，不要求模拟器源码存在：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -BatchRuns 100
 
-# 另外启用两项目联调，执行13组工作台测试：
+# Windows另外启用两项目联调，执行15组工作台测试：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -WithSimulator -BatchRuns 100
 ```
 
@@ -86,7 +88,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-portable.ps1
 ```
 
-主程序包位于 `dist/StationTestWorkbench-0.4.0-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
+主程序包位于 `dist/StationTestWorkbench-0.4.1-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
 
 ## 配方与一致性
 
@@ -121,6 +123,6 @@ scripts/ docs/ recipes/  验证、启动、打包、说明与配方示例
 
 沿用同级温湿度项目 `Qwenshiducaiji` 的目录风格：`.h/.cpp` 平铺在根目录，测试平铺在 `tests/`，由一个根 `CMakeLists.txt` 管理。构建分为 `WorkbenchRuntime`（运行逻辑）和 `WorkbenchWidgets`（界面）两个库，对应温湿度项目的 `SensorRuntime` / `SensorWidgets`。业务职责仍按文件区分，模拟器保持同级独立工程。
 
-`启动主程序.cmd` 继续使用 `demo-data/client/data/workbench.db` 和 `demo-data/client/logs/workbench.log`。源码调整不搬迁已有数据库、日志和工位状态文件。新模拟器启动脚本默认使用自己的 `demo-data`；继续使用原工位状态时，可对模拟器显式指定原目录。
+`启动主程序.cmd` 默认使用固定用户数据目录中的 `data/workbench.db` 和 `logs/workbench.log`。从旧版迁移时使用 `scripts/install-portable.ps1`，显式传入 `-LegacyClientDirectory` 和 `-LegacySimulatorDirectory`；脚本核验迁移副本、保留原文件、更新两个桌面入口，目标已有数据时拒绝覆盖。更新后不再把安装版本目录作为用户数据根目录。
 
-裸客户端默认使用 Qt AppDataLocation，`--data-dir` 可覆盖。原温湿度、串口和其他 Qt 工程均独立保留。本项目尚未接入实际测试仪器、PLC 或治具，模拟验证不代表真实电气检测交付。
+裸客户端默认使用 Qt AppLocalDataLocation，`--data-dir` 可覆盖。原温湿度、串口和其他 Qt 工程均独立保留。本项目尚未接入实际测试仪器、PLC 或治具，模拟验证不代表真实电气检测交付。
