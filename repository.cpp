@@ -971,13 +971,19 @@ void Repository::listRecipes()
 
 void Repository::publishRecipe(const QJsonObject &recipe)
 {
-    if (!checkThread())
-        return;
     // 保存配方校验、版本冲突或事务失败的原因。
     QString error;
+    if (!checkThread())
+    {
+        error = QStringLiteral("配方发布必须在数据库所属线程执行");
+        emit operationError(error);
+        emit recipePublishFinished(recipe, false, error);
+        return;
+    }
     if (!ready(&error) || !Domain::validateRecipe(recipe, &error) || !begin(&error))
     {
         emit operationError(error);
+        emit recipePublishFinished(recipe, false, error);
         return;
     }
     // 记录配方内容核对或新版本插入是否成功。
@@ -1016,6 +1022,7 @@ void Repository::publishRecipe(const QJsonObject &recipe)
         m_db.rollback();
     if (!ok)
         emit operationError(error);
+    emit recipePublishFinished(recipe, ok, error);
 }
 
 bool Repository::insertAudit(const QString &actor, const QString &action, const QString &runId,

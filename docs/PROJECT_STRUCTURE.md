@@ -24,6 +24,7 @@ D:/demoqt6/
 │  ├─ historydialog.h/.cpp      独立历史追溯、查询及导出窗口
 │  ├─ logdialog.h/.cpp          独立运行日志窗口
 │  ├─ stationconfigurationdialog.h/.cpp 独立工位IP和端口配置窗口
+│  ├─ recipeeditordialog.h/.cpp  配方草稿编辑、复制、JSON导入导出及发布结果
 │  ├─ models.h/.cpp             工位、步骤、历史及日志模型
 │  ├─ toolstyle.h               界面样式
 │  ├─ tests/                    平铺的独立测试、可选联调和历史查询基准

@@ -3,27 +3,23 @@
 #include "logdialog.h"
 #include "maintenancedialog.h"
 #include "stationconfigurationdialog.h"
+#include "recipeeditordialog.h"
 #include "runtimeconfiguration.h"
 #include "workbenchcontroller.h"
 #include "models.h"
 #include "toolstyle.h"
-#include "domain.h"
 #include <QAbstractItemView>
 #include <QAction>
 #include <QCloseEvent>
 #include <QComboBox>
-#include <QFile>
-#include <QFileDialog>
 #include <QFrame>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QGuiApplication>
 #include <QHeaderView>
 #include <QHBoxLayout>
-#include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
 #include <QPushButton>
 #include <QScreen>
 #include <QStatusBar>
@@ -74,7 +70,8 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
     : QMainWindow(parent), m_controller(new WorkbenchController(this)),
       m_stations(new StationModel(this)), m_steps(new StepModel(this)),
       m_historyDialog(new HistoryDialog(m_controller, this)),
-      m_logDialog(new LogDialog(m_controller, this))
+      m_logDialog(new LogDialog(m_controller, this)),
+      m_recipeEditorDialog(new RecipeEditorDialog(m_controller, this))
 {
     // 保存连接配置读取失败的原因，损坏时暂停接入并打开修复窗口。
     QString connectionError;
@@ -130,7 +127,9 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
             [this](const QJsonArray &recipes)
             {
                 // selected 保存刷新列表前选中的配方版本。
-                const QString selected = m_recipe->currentData().toString();
+                const QString selected = m_requestedRecipeVersion.isEmpty()
+                                             ? m_recipe->currentData().toString()
+                                             : m_requestedRecipeVersion;
                 m_recipes = recipes;
                 m_recipe->blockSignals(true);
                 m_recipe->clear();
@@ -144,7 +143,10 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
                 // old 为原先选中版本在新列表中的位置。
                 const int old = m_recipe->findData(selected);
                 if (old >= 0)
+                {
                     m_recipe->setCurrentIndex(old);
+                    m_requestedRecipeVersion.clear();
+                }
                 m_recipe->blockSignals(false);
                 showSelectedStation();
                 syncRecipePreview();
@@ -159,7 +161,6 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
             [this](bool ok)
             {
                 m_backendReady = ok;
-                m_import->setEnabled(ok);
                 updateCommandAvailability();
                 syncRecipePreview();
                 statusBar()->showMessage(ok ? QStringLiteral("就绪")
@@ -167,6 +168,8 @@ MainWindow::MainWindow(const QString &dataDirectory, const QList<StationEndpoint
                 if (!ok)
                     m_detail->setText(QStringLiteral("后台不可用"));
             });
+    connect(m_recipeEditorDialog, &RecipeEditorDialog::recipeCommitted, this,
+            [this](const QString &version) { m_requestedRecipeVersion = version; });
     m_controller->initialize(dataDirectory, configuredEndpoints);
     if (!connectionError.isEmpty())
     {
@@ -180,6 +183,7 @@ MainWindow::~MainWindow()
     disconnect(m_controller, nullptr, this, nullptr);
     disconnect(m_controller, nullptr, m_historyDialog, nullptr);
     disconnect(m_controller, nullptr, m_logDialog, nullptr);
+    disconnect(m_controller, nullptr, m_recipeEditorDialog, nullptr);
     if (m_maintenanceDialog)
         disconnect(m_controller, nullptr, m_maintenanceDialog, nullptr);
     m_controller->shutdown();
@@ -187,9 +191,15 @@ MainWindow::~MainWindow()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    if (!m_recipeEditorDialog->confirmApplicationClose())
+    {
+        event->ignore();
+        return;
+    }
     m_historyDialog->close();
     m_logDialog->close();
     m_stationConfigurationDialog->close();
+    m_recipeEditorDialog->close();
     if (m_maintenanceDialog)
         m_maintenanceDialog->close();
     QMainWindow::closeEvent(event);
@@ -316,9 +326,9 @@ void MainWindow::buildUi()
     m_recipe->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     m_recipe->setMinimumContentsLength(18);
     grid->addWidget(m_recipe, 1, 2, 1, 2);
-    m_import = new QPushButton(QStringLiteral("发布配方"), commands);
-    m_import->setEnabled(false);
-    grid->addWidget(m_import, 1, 4);
+    m_editRecipe = new QPushButton(QStringLiteral("配方编辑"), commands);
+    m_editRecipe->setObjectName("openRecipeEditorButton");
+    grid->addWidget(m_editRecipe, 1, 4);
     // 将三个测试动作作为同一操作组。
     auto *actions = new QHBoxLayout;
     actions->setContentsMargins(0, 0, 0, 0);
@@ -372,7 +382,7 @@ void MainWindow::buildUi()
                 if (m_cancel->isEnabled())
                     m_controller->cancelTest(selectedStationId());
             });
-    connect(m_import, &QPushButton::clicked, this, &MainWindow::importRecipe);
+    connect(m_editRecipe, &QPushButton::clicked, this, &MainWindow::openRecipeEditor);
     connect(m_reconcile, &QPushButton::clicked, this,
             // 点击重新核对后按原测试编号查询当前工位状态。
             [this]
@@ -468,36 +478,8 @@ void MainWindow::updateCommandAvailability()
     m_cancel->setEnabled(m_backendReady && row["canCancel"].toBool());
     m_reconcile->setEnabled(m_backendReady && row["canReconcile"].toBool());
 }
-void MainWindow::importRecipe()
+void MainWindow::openRecipeEditor()
 {
-    // path 为操作员选择的待发布配方 JSON 文件路径。
-    const QString path = QFileDialog::getOpenFileName(
-        this, QStringLiteral("发布一个新的只读配方版本"), {}, QStringLiteral("JSON 配方 (*.json)"));
-    if (path.isEmpty())
-        return;
-    // file 负责读取选中的配方文件。
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly) || file.size() > 256 * 1024)
-    {
-        QMessageBox::warning(this, QStringLiteral("读取失败"),
-                             QStringLiteral("无法读取配方，或文件超过 256 KiB。"));
-        return;
-    }
-    // parse 保存配方 JSON 解析时的错误位置和原因。
-    QJsonParseError parse;
-    // json 保存解析后的配方文档。
-    const auto json = QJsonDocument::fromJson(file.readAll(), &parse);
-    // error 保存解析或配方规则校验的失败原因。
-    QString error;
-    if (parse.error != QJsonParseError::NoError || !json.isObject())
-        error = QStringLiteral("必须是有效的 JSON 对象：") + parse.errorString();
-    else if (!Domain::validateRecipe(json.object(), &error))
-    {
-    }
-    if (!error.isEmpty())
-    {
-        QMessageBox::warning(this, QStringLiteral("配方未发布"), error);
-        return;
-    }
-    m_controller->publishRecipe(json.object());
+    m_recipeEditorDialog->prepare(m_recipe->currentData().toString());
+    openWindow(m_recipeEditorDialog);
 }

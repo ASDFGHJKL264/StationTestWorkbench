@@ -102,6 +102,8 @@ class Repository final : public QObject
     void failedSnsExported(const QString &path, bool ok, qint64 count, const QString &error);
     // 回报可用的 recipes 已发布配方列表。
     void recipesReady(const QJsonArray &recipes);
+    // 回报 recipe 已实际提交或发布失败，error 保留可显示的失败原因。
+    void recipePublishFinished(const QJsonObject &recipe, bool ok, const QString &error);
     // 发布 message 数据库操作错误，供控制器记录日志。
     void operationError(const QString &message);
 

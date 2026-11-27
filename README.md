@@ -22,7 +22,11 @@
 
 主窗口保留工位状态、产品与配方、当前测试。顶栏按钮分别打开“历史追溯”“运行日志”“工位配置”“管理员维护”子窗口，各入口只保留一处。所有业务子窗口使用标题栏右上角的 × 关闭；关闭子窗口不停止测试，关闭主窗口会一并关闭子窗口并停止后台。
 
-界面预览：[主窗口](docs/workbench-preview.png)、[工位配置](docs/station-configuration-preview.png)、[历史追溯](docs/history-preview.png)、[维护中心](docs/maintenance-preview.png)。
+界面预览：[主窗口](docs/workbench-preview.png)、[配方编辑](docs/recipe-editor-preview.png)、[工位配置](docs/station-configuration-preview.png)、[历史追溯](docs/history-preview.png)、[维护中心](docs/maintenance-preview.png)。
+
+配方下拉框右侧的“配方编辑”打开独立窗口，可新建配方，或选择参考配方并复制为新版本。表格直接填写项目编号、名称、单位、上下限和正常参考值，支持1至16项及增删、上移、下移。点击“发布新版本”，数据库确认提交成功后才显示成功，并在主窗口自动选中新版本供后续测试使用。已发布版本不能覆盖，复制时自动建议未使用的版本号。
+
+编辑窗口可导入、导出JSON；导入只建立草稿，导出不发布。错误输入、重复编号、版本冲突和写入失败均保留草稿；隐藏窗口后重开继续编辑，退出主窗口时会确认尚未发布的手动修改，发布在途时等待结果后退出。来源列表刷新不会覆盖当前草稿。
 
 历史追溯窗口按完整 SN 精确匹配，留空查询全部；可组合本地日期范围、工位和质量判定筛选。日期默认不启用，结束日期包含当天。每页最多100条，采用 ID 游标翻页；表头排序仅作用于当前页。
 
@@ -64,10 +68,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-demo.ps1 -Si
 在 Qt Creator 中打开根目录 `CMakeLists.txt`，选择 Qt 6 MinGW 64位套件。主程序需要 Core、Network、Sql、Widgets，测试额外需要 Qt Test。
 
 ```powershell
-# Windows独立构建及12组测试，不要求模拟器源码存在：
+# Windows独立构建及13组测试，不要求模拟器源码存在：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -BatchRuns 100
 
-# Windows另外启用两项目联调，执行15组工作台测试：
+# Windows另外启用两项目联调，执行16组工作台测试：
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1 -WithSimulator -BatchRuns 100
 ```
 
@@ -88,11 +92,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\smoke-portable.ps1
 ```
 
-主程序包位于 `dist/StationTestWorkbench-0.4.1-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
+主程序包位于 `dist/StationTestWorkbench-0.5.0-win64.zip`，只包含工作台及所需 Qt 运行库。打包名称从 CMake 项目版本读取，每次使用全新的暂存目录，只复制已纳入版本控制的说明和配方，运行数据不进入 ZIP。重复打包时，旧便携目录连同其中的本地数据保存在 `build/package-backup-*`，新包保持干净。模拟器使用另一工程的打包脚本，生成单独的 `StationSimulator-0.1.0-win64.zip`。主程序部署验证允许工位离线，确认独立启动、SQLite、日志以及版本和文件哈希一致。
 
 ## 配方与一致性
 
-内置 `demo-5v-v1` 包含输出电压、待机电流、IO 回环。“发布配方”可以加载 `recipes/demo-5v-v2.json` 或新增启动耗时步骤的 `recipes/demo-5v-startup-v1.json`。模拟器按 TCP 配方预览更新异常选项，无需先执行一次测试。
+内置 `demo-5v-v1` 包含输出电压、待机电流、IO 回环。在“配方编辑”窗口点击“导入 JSON”，可载入 `recipes/demo-5v-v2.json` 或新增启动耗时步骤的 `recipes/demo-5v-startup-v1.json`，校验后点击“发布新版本”。模拟器按 TCP 配方预览更新异常选项，无需先执行一次测试。
 
 每个配方步骤包含 `id`、`label`、`unit`、`min`、`max`、`nominal`，满足 `min <= nominal <= max`，最多16步。限值包含端点，步骤顺序参与契约。已发布版本不可原地修改，同版本同内容发布为幂等操作；运行另存完整配方快照，历史结果不随新配方变化。
 

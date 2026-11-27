@@ -5,10 +5,12 @@
 #include "toolstyle.h"
 #include "maintenancedialog.h"
 #include "stationconfigurationdialog.h"
+#include "recipeeditordialog.h"
 #include <QAction>
 #include <QSpinBox>
 #include <QFileInfo>
 #include <QDialog>
+#include <QMessageBox>
 #include <QtTest>
 #include <QTemporaryDir>
 #include <QLineEdit>
@@ -263,6 +265,11 @@ class WindowTests final : public QObject
             openWindow(window, "openStationConfigurationAction", "stationConfigurationDialog");
         QVERIFY(maintenance);
         QVERIFY(connections);
+        // 配方编辑窗口与其他业务窗口独立，并由主窗口统一关闭。
+        auto *editor = window.findChild<RecipeEditorDialog *>();
+        QVERIFY(editor && !editor->isVisible());
+        QTest::mouseClick(window.findChild<QPushButton *>("openRecipeEditorButton"), Qt::LeftButton);
+        QVERIFY(editor->isVisible());
         QVERIFY(history->isVisible() && logs->isVisible() && maintenance->isVisible());
         history->close();
         logs->close();
@@ -276,6 +283,64 @@ class WindowTests final : public QObject
         QVERIFY(!logs->isVisible());
         QVERIFY(!maintenance->isVisible());
         QVERIFY(!connections->isVisible());
+        QVERIFY(!editor->isVisible());
+    }
+
+    // 验证实际编辑入口发布后刷新主窗口，并自动选中新配方供后续测试使用。
+    void recipeEditorPublishesAndSelectsNewVersion()
+    {
+        // 隔离本次编辑和真实数据库发布的记录。
+        QTemporaryDir directory;
+        // 使用正常主窗口和后台连接验证完整操作路径。
+        MainWindow window(directory.path(), {});
+        window.show();
+        QTRY_VERIFY(window.findChild<QPushButton *>("queryHistoryButton")->isEnabled());
+        QTRY_VERIFY(window.findChild<QComboBox *>("recipeCombo")->count() > 0);
+        QTest::mouseClick(window.findChild<QPushButton *>("openRecipeEditorButton"), Qt::LeftButton);
+        // 定位实际显示的编辑子窗口。
+        auto *editor = window.findChild<RecipeEditorDialog *>();
+        QVERIFY(editor && editor->isVisible());
+        editor->findChild<QLineEdit *>("recipeNameInput")->setText(QStringLiteral("主窗口发布配方"));
+        editor->findChild<QLineEdit *>("recipeVersionInput")->setText("window-created-v1");
+        QTest::mouseClick(editor->findChild<QPushButton *>("publishRecipeButton"), Qt::LeftButton);
+        // 主窗口应在持久化成功并收到新列表后选中目标版本。
+        auto *recipes = window.findChild<QComboBox *>("recipeCombo");
+        QTRY_COMPARE(recipes->currentData().toString(), QString("window-created-v1"));
+        QVERIFY(recipes->currentText().contains(QStringLiteral("主窗口发布配方")));
+        QVERIFY(saveWindowEvidence(editor, "recipe-editor-published.png"));
+        editor->close();
+        QTest::mouseClick(window.findChild<QPushButton *>("openRecipeEditorButton"), Qt::LeftButton);
+        QCOMPARE(window.findChild<RecipeEditorDialog *>(), editor);
+        QCOMPARE(editor->findChild<QLineEdit *>("recipeVersionInput")->text(), QString("window-created-v1"));
+    }
+
+    // 验证关闭主窗口前可以取消放弃未发布草稿。
+    void closingMainWindowProtectsUnpublishedRecipeDraft()
+    {
+        // 隔离尚未发布的编辑内容和后台数据。
+        QTemporaryDir directory;
+        // 从正式入口打开草稿窗口。
+        MainWindow window(directory.path(), {});
+        window.show();
+        QTest::mouseClick(window.findChild<QPushButton *>("openRecipeEditorButton"), Qt::LeftButton);
+        // 填写部分内容也必须受到退出保护。
+        auto *editor = window.findChild<RecipeEditorDialog *>();
+        editor->findChild<QLineEdit *>("recipeNameInput")->setText(QStringLiteral("未发布配方"));
+        QTimer::singleShot(0, [] {
+            for (auto *widget : QApplication::topLevelWidgets())
+                if (auto *message = qobject_cast<QMessageBox *>(widget))
+                    message->button(QMessageBox::No)->click();
+        });
+        QVERIFY(!window.close());
+        QVERIFY(window.isVisible());
+        QCOMPARE(editor->findChild<QLineEdit *>("recipeNameInput")->text(), QStringLiteral("未发布配方"));
+        QTimer::singleShot(0, [] {
+            for (auto *widget : QApplication::topLevelWidgets())
+                if (auto *message = qobject_cast<QMessageBox *>(widget))
+                    message->button(QMessageBox::Yes)->click();
+        });
+        QVERIFY(window.close());
+        QVERIFY(!editor->isVisible());
     }
 
     // 验证配置窗口整体校验、保存、本机重读及关闭复用。
@@ -394,6 +459,10 @@ class WindowTests final : public QObject
         auto *configurationDialog =
             openWindow(window, "openStationConfigurationAction", "stationConfigurationDialog");
         QVERIFY(historyDialog && logDialog && configurationDialog);
+        QTest::mouseClick(window.findChild<QPushButton *>("openRecipeEditorButton"), Qt::LeftButton);
+        // 检查编辑窗口及其文本、表格和发布操作的实际配色。
+        auto *recipeEditor = window.findChild<RecipeEditorDialog *>();
+        QVERIFY(recipeEditor && recipeEditor->isVisible());
         // 输入或筛选本次验证使用的产品序列号。
         auto *sn = window.findChild<QLineEdit *>("snInput");
         // 输入历史记录的完整 SN 筛选条件。
@@ -440,6 +509,8 @@ class WindowTests final : public QObject
             QVERIFY(saveWindowEvidence(
                 configurationDialog,
                 QString("connections-%1-%2.png").arg(QTest::currentDataTag()).arg(phase)));
+            QVERIFY(saveWindowEvidence(
+                recipeEditor, QString("recipe-editor-%1-%2.png").arg(QTest::currentDataTag()).arg(phase)));
             for (auto *widget :
                  QList<QWidget *>{&window,
                                   sn,
@@ -460,7 +531,10 @@ class WindowTests final : public QObject
                                   logs,
                                   configurationDialog,
                                   configurationDialog->findChild<QLineEdit *>("stationHost1"),
-                                  configurationDialog->findChild<QSpinBox *>("stationPort1")})
+                                  configurationDialog->findChild<QSpinBox *>("stationPort1"),
+                                  recipeEditor, recipeEditor->findChild<QLineEdit *>("recipeNameInput"),
+                                  recipeEditor->findChild<QLineEdit *>("recipeVersionInput"),
+                                  recipeEditor->findChild<QPushButton *>("publishRecipeButton")})
             {
                 // 保存待设置或检查的应用及控件调色板。
                 const auto palette = widget->palette();

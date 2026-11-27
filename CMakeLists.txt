@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(StationTestWorkbench VERSION 0.4.1 LANGUAGES CXX)
+project(StationTestWorkbench VERSION 0.5.0 LANGUAGES CXX)
 # 指定项目源码使用的 C++ 语言标准。
 set(CMAKE_CXX_STANDARD 17)
 # 要求编译器严格支持所选 C++ 标准。
@@ -63,6 +63,7 @@ qt_add_library(WorkbenchWidgets STATIC
     models.h models.cpp
     maintenancedialog.h maintenancedialog.cpp
     stationconfigurationdialog.h stationconfigurationdialog.cpp
+    recipeeditordialog.h recipeeditordialog.cpp
     toolstyle.h)
 target_link_libraries(WorkbenchWidgets PUBLIC WorkbenchRuntime Qt6::Widgets)
 
@@ -94,6 +95,7 @@ if(BUILD_TESTING)
     workbench_test(ModelTests test_models.cpp WorkbenchWidgets)
     workbench_test(WorkflowTests test_workflow.cpp WorkbenchRuntime)
     workbench_test(WindowTests test_window.cpp WorkbenchWidgets)
+    workbench_test(RecipeEditorTests test_recipe_editor.cpp WorkbenchWidgets)
     workbench_test(LoggerTests test_logger.cpp WorkbenchRuntime)
     workbench_test(AdminAccessTests test_adminaccess.cpp WorkbenchRuntime)
     workbench_test(DatabaseMaintenanceTests test_database_maintenance.cpp WorkbenchRuntime)
@@ -108,7 +110,7 @@ if(BUILD_TESTING)
     endif()
 
     # 收集需要配置无显示器图形平台的界面测试目标。
-    set(workbench_gui_tests ModelTests WindowTests)
+    set(workbench_gui_tests ModelTests WindowTests RecipeEditorTests)
     if(WORKBENCH_ENABLE_SIMULATOR_TESTS)
         if(NOT EXISTS "${STATION_SIMULATOR_SOURCE_DIR}/CMakeLists.txt")
             message(FATAL_ERROR "Set STATION_SIMULATOR_SOURCE_DIR to the independent StationSimulator project.")

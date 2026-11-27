@@ -89,6 +89,8 @@ class WorkbenchController final : public QObject
     void historyFailed(const QString &error);
     // 向界面发布 recipes 可选配方列表。
     void recipesReady(const QJsonArray &recipes);
+    // 向编辑窗口回报 recipe 的实际发布结果，失败时填写 error。
+    void recipePublishFinished(const QJsonObject &recipe, bool ok, const QString &error);
     // 向界面发布 message 日志，warning 标记警告级别。
     void logMessage(const QString &message, bool warning = false);
     // 通知后台初始化是否成功，ok 为成功状态。

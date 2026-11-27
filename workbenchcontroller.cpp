@@ -112,6 +112,8 @@ void WorkbenchController::initialize(const QString &dataDirectory,
                 m_recipes = recipes;
                 emit recipesReady(recipes);
             });
+    connect(m_repository, &Repository::recipePublishFinished, this,
+            &WorkbenchController::recipePublishFinished);
     // 接收初始化的 ok 和 error，并捕获 endpoints 以启动网络连接。
     connect(
         m_repository, &Repository::initialized, this,
@@ -283,7 +285,12 @@ void WorkbenchController::exportFailedSns(const QString &path)
 void WorkbenchController::publishRecipe(const QJsonObject &recipe)
 {
     if (!m_ready || m_stopping)
+    {
+        emit recipePublishFinished(recipe, false,
+                                   m_stopping ? QStringLiteral("后台已停止，无法发布配方")
+                                              : QStringLiteral("后台尚未就绪，无法发布配方"));
         return;
+    }
     // 捕获 r 存储对象和 recipe 配方副本，发布后重新读取可选列表。
     QMetaObject::invokeMethod(m_repository,
                               [r = m_repository, recipe]

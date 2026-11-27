@@ -17,6 +17,7 @@ class HistoryDialog;
 class LogDialog;
 class MaintenanceDialog;
 class StationConfigurationDialog;
+class RecipeEditorDialog;
 
 class MainWindow final : public QMainWindow
 {
@@ -48,8 +49,8 @@ class MainWindow final : public QMainWindow
     void syncRecipePreview();
     // 按后台状态更新开始、取消和核对按钮。
     void updateCommandAvailability();
-    // 读取并校验 JSON 文件后发布新配方版本。
-    void importRecipe();
+    // 打开并复用配方编辑窗口，首次以当前配方建立新版本草稿。
+    void openRecipeEditor();
     // 返回当前选中工位的业务编号。
     int selectedStationId() const;
     // 主窗口持有所有业务窗口共用的后台服务。
@@ -64,8 +65,8 @@ class MainWindow final : public QMainWindow
     QLineEdit *m_snInput;
     // 选择新测试使用的配方版本。
     QComboBox *m_recipe;
-    // 提交测试、取消、核对及配方发布操作。
-    QPushButton *m_start, *m_cancel, *m_reconcile, *m_import;
+    // 提交测试、取消、核对及打开配方编辑窗口。
+    QPushButton *m_start, *m_cancel, *m_reconcile, *m_editRecipe;
     // 显示当前工位、测试状态、身份及在线数量。
     QLabel *m_stationTitle, *m_detail, *m_runIdentity, *m_connectionSummary;
     // 缓存已发布配方，供当前测试步骤预览。
@@ -80,4 +81,8 @@ class MainWindow final : public QMainWindow
     MaintenanceDialog *m_maintenanceDialog = nullptr;
     // 复用独立工位连接配置窗口，保存结果不改变当前连接。
     StationConfigurationDialog *m_stationConfigurationDialog;
+    // 隐藏后保留正在编辑的配方草稿。
+    RecipeEditorDialog *m_recipeEditorDialog;
+    // 发布成功后，在下一次列表回报中选中新配方版本。
+    QString m_requestedRecipeVersion;
 };

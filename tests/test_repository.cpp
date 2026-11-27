@@ -115,6 +115,8 @@ class RepositoryTests final : public QObject
     void versionOneMigratesWithoutLosingHistory();
     // 验证已发布配方不能原地修改，新版本仍可正常发布。
     void publishedRecipeVersionIsImmutable();
+    // 验证发布回报覆盖未就绪、写锁和提交失败，成功通知时新版本已可读。
+    void recipePublicationReportsFailuresAndCommittedResult();
     // 验证每页条数有界且新记录插入不改变旧页游标。
     void keysetHistoryIsBoundedAndStable();
     // 验证本地日期边界、组合条件和完整 SN 精确匹配。
@@ -548,15 +550,25 @@ void RepositoryTests::publishedRecipeVersionIsImmutable()
     r.initialize(path);
     // 记录同版本冲突或无效配方引起的操作错误。
     QSignalSpy error(&r, &Repository::operationError);
+    // 按原始请求对象和实际提交状态核对每次发布回报。
+    QSignalSpy published(&r, &Repository::recipePublishFinished);
     // 已发布且不允许原地修改的原始配方。
     const auto original = Domain::defaultRecipe();
     r.publishRecipe(original);
     QCOMPARE(error.count(), 0);
+    QCOMPARE(published.count(), 1);
+    QCOMPARE(qvariant_cast<QJsonObject>(published.last()[0]), original);
+    QVERIFY(published.last()[1].toBool());
+    QVERIFY(published.last()[2].toString().isEmpty());
     // 用于测试内容冲突及新版本发布的可编辑配方副本。
     auto edited = original;
     edited["name"] = "silent-change";
     r.publishRecipe(edited);
     QCOMPARE(error.count(), 1);
+    QCOMPARE(published.count(), 2);
+    QCOMPARE(qvariant_cast<QJsonObject>(published.last()[0]), edited);
+    QVERIFY(!published.last()[1].toBool());
+    QVERIFY(published.last()[2].toString().contains(QStringLiteral("不可修改")));
     // 直接核对配方数量和原始哈希的独立连接。
     ExternalConnection db(path);
     QCOMPARE(db.count("recipes"), 1);
@@ -564,6 +576,10 @@ void RepositoryTests::publishedRecipeVersionIsImmutable()
     edited["version"] = "demo-5v-v2";
     r.publishRecipe(edited);
     QCOMPARE(error.count(), 1);
+    QCOMPARE(published.count(), 3);
+    QCOMPARE(qvariant_cast<QJsonObject>(published.last()[0]), edited);
+    QVERIFY(published.last()[1].toBool());
+    QVERIFY(published.last()[2].toString().isEmpty());
     QCOMPARE(db.count("recipes"), 2);
     // 记录使用新发布版本进行预约的处理结果。
     QSignalSpy reserved(&r, &Repository::runReserved);
@@ -573,7 +589,84 @@ void RepositoryTests::publishedRecipeVersionIsImmutable()
     edited["steps"] = QJsonArray{};
     r.publishRecipe(edited);
     QCOMPARE(error.count(), 2);
+    QCOMPARE(published.count(), 4);
+    QCOMPARE(qvariant_cast<QJsonObject>(published.last()[0]), edited);
+    QVERIFY(!published.last()[1].toBool());
+    QVERIFY(!published.last()[2].toString().isEmpty());
     QCOMPARE(db.count("recipes"), 2);
+}
+
+void RepositoryTests::recipePublicationReportsFailuresAndCommittedResult()
+{
+    // 隔离发布失败注入和结果可见性的数据库。
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    // 保存当前测试的数据库路径。
+    const auto path = dir.filePath("publication.db");
+    // 接收发布请求并维护真实事务状态的仓储。
+    Repository repository;
+    // 对每个请求核对恰好一次回报，防止编辑窗口一直等待或误报成功。
+    QSignalSpy published(&repository, &Repository::recipePublishFinished);
+    // 保留兼容原有日志错误的回报数量。
+    QSignalSpy errors(&repository, &Repository::operationError);
+    // 构造尚未发布、可区分于默认配方的完整请求。
+    auto recipe = Domain::defaultRecipe();
+    recipe["version"] = "publication-result-v1";
+    repository.publishRecipe(recipe);
+    QCOMPARE(published.count(), 1);
+    QCOMPARE(qvariant_cast<QJsonObject>(published.last()[0]), recipe);
+    QVERIFY(!published.last()[1].toBool());
+    QVERIFY(!published.last()[2].toString().isEmpty());
+    QCOMPARE(errors.count(), 1);
+    repository.initialize(path);
+    // 从独立连接观察提交可见性，同时注入锁和延迟外键故障。
+    ExternalConnection database(path);
+    QVERIFY(database.db.isOpen());
+    // 记录成功通知发出时其他连接实际可读的配方数量。
+    int visibleAtNotification = -1;
+    connect(&repository, &Repository::recipePublishFinished, &repository,
+            [&](const QJsonObject &, bool ok, const QString &)
+            {
+                if (ok)
+                    visibleAtNotification = database.count("recipes");
+            });
+    QVERIFY(database.execute("BEGIN IMMEDIATE"));
+    repository.publishRecipe(recipe);
+    QCOMPARE(published.count(), 2);
+    QVERIFY(!published.last()[1].toBool());
+    QVERIFY(!published.last()[2].toString().isEmpty());
+    QCOMPARE(database.count("recipes"), 1);
+    QCOMPARE(errors.count(), 2);
+    QVERIFY(database.execute("ROLLBACK"));
+    QVERIFY(database.execute("CREATE TABLE publication_parent(id INTEGER PRIMARY KEY)"));
+    QVERIFY(database.execute("CREATE TABLE publication_child(parent_id INTEGER REFERENCES "
+                             "publication_parent(id) DEFERRABLE INITIALLY DEFERRED)"));
+    QVERIFY(database.execute("CREATE TRIGGER defer_publication_failure AFTER INSERT ON recipes "
+                             "BEGIN INSERT INTO publication_child VALUES(999); END"));
+    repository.publishRecipe(recipe);
+    QCOMPARE(published.count(), 3);
+    QCOMPARE(qvariant_cast<QJsonObject>(published.last()[0]), recipe);
+    QVERIFY(!published.last()[1].toBool());
+    QVERIFY(!published.last()[2].toString().isEmpty());
+    QCOMPARE(database.count("recipes"), 1);
+    QCOMPARE(database.count("publication_child"), 0);
+    QCOMPARE(visibleAtNotification, -1);
+    QCOMPARE(errors.count(), 3);
+    QVERIFY(database.execute("DROP TRIGGER defer_publication_failure"));
+    repository.publishRecipe(recipe);
+    QCOMPARE(published.count(), 4);
+    QCOMPARE(qvariant_cast<QJsonObject>(published.last()[0]), recipe);
+    QVERIFY(published.last()[1].toBool());
+    QVERIFY(published.last()[2].toString().isEmpty());
+    QCOMPARE(visibleAtNotification, 2);
+    QCOMPARE(database.count("recipes"), 2);
+    QCOMPARE(errors.count(), 3);
+    repository.shutdown();
+    repository.publishRecipe(recipe);
+    QCOMPARE(published.count(), 5);
+    QVERIFY(!published.last()[1].toBool());
+    QVERIFY(!published.last()[2].toString().isEmpty());
+    QCOMPARE(errors.count(), 4);
 }
 
 void RepositoryTests::keysetHistoryIsBoundedAndStable()
